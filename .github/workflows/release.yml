@@ -1,0 +1,47 @@
+name: build-and-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build FastPVE
+        run: |
+          go build -trimpath -a -ldflags "-s -w -extldflags '-static' -X main.version=latest" -o FastPVE ./cmd/fastpve
+
+      - name: Build fastpve-download
+        run: |
+          go build -trimpath -a -ldflags "-s -w -extldflags '-static'" -o fastpve-download ./cmd/download
+
+      - name: Generate checksums
+        run: |
+          sha256sum FastPVE fastpve-download > checksums.txt
+
+      - name: Update latest tag
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Create/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "FastPVE Plus (latest)"
+          body: "Auto-built from main branch.\n\n### SHA256\n```\n$(cat checksums.txt)\n```"
+          files: |
+            FastPVE
+            fastpve-download
+            checksums.txt
+          prerelease: true
