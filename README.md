@@ -1,7 +1,7 @@
 # fastpve
 One click to run vm in PVE. 对应论坛帖子：https://www.koolcenter.com/t/topic/7777
 
-可以在 PVE 上面一键下载并安装 Windows，iStoreOS，Docker 等等系统。
+可以在 PVE 上面一键下载并安装 Windows，iStoreOS，Docker，DD 镜像等等系统。
 
 ### This script is meant for quick & easy install:
 #### via curl
@@ -16,6 +16,37 @@ bash -c "$(wget --no-check-certificate -qO- https://www.linkease.com/rd/fastpve/
 ```Bash
 cd /tmp; wget --no-check-certificate -O fastpve-install.sh https://www.linkease.com/rd/fastpve/; bash ./fastpve-install.sh
 ```
+
+### DD 镜像安装
+
+支持从 URL 下载任意 raw 磁盘镜像（.img / .img.gz / .img.xz / .img.zst），直接导入为虚拟机磁盘。
+
+**交互式安装（fastpve 菜单）**：
+
+1. 启动 `fastpve`，选择 `6、安装DD镜像`
+2. 选择已有 .img 文件，或输入 URL 下载新镜像
+3. 选择 BIOS 模式：UEFI (OVMF，推荐) 或 SeaBIOS (传统)
+4. 配置 CPU 核数、内存、磁盘大小
+5. 选择「下载并安装」或「仅下载」
+
+**命令行下载（fastpve-download）**：
+
+```bash
+# 下载 DD 镜像
+fastpve-download dd --url https://example.com/windows11.img.gz
+
+# 指定路径和 BIOS 模式
+fastpve-download dd \
+  --url https://example.com/system.img.xz \
+  --iso-path /var/lib/vz/template/iso \
+  --cache-path /var/lib/vz/template/cache \
+  --bios uefi
+
+# 断点续传
+fastpve-download dd --resume
+```
+
+**支持的压缩格式**：`.gz` (gzip)、`.xz`、`.zst`/`.zstd`，以及未压缩的 `.img` 文件。
 
 ### 镜像来源
 
