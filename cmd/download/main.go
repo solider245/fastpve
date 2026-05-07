@@ -17,11 +17,12 @@ func main() {
 func newApp() *cli.Command {
 	return &cli.Command{
 		Name:  "fastpve-download",
-		Usage: "Download VM images (Windows/Ubuntu/iStoreOS/VirtIO)",
+		Usage: "Download VM images (Windows/Ubuntu/iStoreOS/DD/VirtIO)",
 		Commands: []*cli.Command{
 			windowsCommand(),
 			ubuntuCommand(),
 			istoreCommand(),
+			ddCommand(),
 			virtioCommand(),
 		},
 	}

@@ -16,7 +16,8 @@ const (
 	selectInstallIstore
 	selectInstallWindows
 	selectInstallUbuntu
-	selectOneClickGPUPassThrough // 新增
+	selectOneClickGPUPassThrough
+	selectInstallDD
 )
 
 const (
@@ -33,8 +34,9 @@ var (
 		"3、安装Windows":  selectInstallWindows,
 		"4、安装Ubuntu":   selectInstallUbuntu,
 		// 目前只做Intel核显直通
-		"5、一键核显直通": selectOneClickGPUPassThrough,
-		"q、退出":     selectQuit,
+		"5、一键核显直通":   selectOneClickGPUPassThrough,
+		"6、安装DD镜像":    selectInstallDD,
+		"q、退出":       selectQuit,
 	}
 )
 
@@ -106,6 +108,12 @@ MAINLOOP:
 			return err
 		case selectOneClickGPUPassThrough:
 			err = promptForGPUPassThrough()
+			if err == errContinue {
+				continue MAINLOOP
+			}
+			return err
+		case selectInstallDD:
+			err = promptForDD()
 			if err == errContinue {
 				continue MAINLOOP
 			}
