@@ -2,125 +2,80 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"sort"
 
+	"github.com/linkease/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
-)
-
-type mainSelection int
-
-const (
-	selectChangeSources mainSelection = iota
-	selectInstallDocker
-	selectInstallIstore
-	selectInstallWindows
-	selectInstallUbuntu
-	selectOneClickGPUPassThrough
-	selectInstallDD
-)
-
-const (
-	selectQuit mainSelection = 255
 )
 
 var errContinue = errors.New("continue")
 
-var (
-	mainMenu = map[string]mainSelection{
-		"0、更换软件源":      selectChangeSources,
-		"1、安装Docker":   selectInstallDocker,
-		"2、安装iStoreOS": selectInstallIstore,
-		"3、安装Windows":  selectInstallWindows,
-		"4、安装Ubuntu":   selectInstallUbuntu,
-		// 目前只做Intel核显直通
-		"5、一键核显直通":   selectOneClickGPUPassThrough,
-		"6、DD-安装更多系统":  selectInstallDD,
-		"q、退出":       selectQuit,
-	}
-)
-
-// https://github.com/nicksnyder/go-i18n
-func getMainSelection(mainItems []string) (mainSelection, error) {
-	prompt := promptui.Select{
-		Label: "按上下键操作：",
-		Items: mainItems,
-	}
-
-	_, result, err := prompt.Run()
-	if err != nil {
-		os.Exit(-1)
-		//return mainSelection(selectQuit), nil
-	}
-	if idx, ok := mainMenu[result]; ok {
-		return mainSelection(idx), nil
-	}
-
-	return -2, errors.New("item not found")
+type menuItem struct {
+	label  string
+	action func() error
 }
 
 func mainPrompt() error {
-	mainItems := make([]string, len(mainMenu))
-	i := 0
-	for k := range mainMenu {
-		mainItems[i] = k
-		i++
-	}
-	mainItems = mainItems[:i]
-	sort.Strings(mainItems)
+	var items []menuItem
 
-MAINLOOP:
+	items = append(items,
+		menuItem{"0、更换软件源", promptForSources},
+		menuItem{"1、安装Docker", promptForDocker},
+		menuItem{"2、安装iStoreOS", promptForIstore},
+		menuItem{"3、安装Windows", promptInstallWindows},
+		menuItem{"4、安装Ubuntu", promptForUbuntu},
+		menuItem{"5、一键核显直通", promptForGPUPassThrough},
+	)
+
+	// Inject all DD presets into the main menu
+	idx := 6
+	for _, cat := range vmdownloader.AllDDPresetCategories() {
+		for i := range cat.Presets {
+			p := cat.Presets[i]
+			items = append(items, menuItem{
+				label:  fmt.Sprintf("%d、%s", idx, p.Name),
+				action: makeDDPresetAction(p),
+			})
+			idx++
+		}
+	}
+
+	// Custom URL
+	items = append(items, menuItem{
+		label:  fmt.Sprintf("%d、自定义URL", idx),
+		action: promptForDD,
+	})
+
+	labels := make([]string, len(items))
+	for i, it := range items {
+		labels[i] = it.label
+	}
+
+	prompt := promptui.Select{
+		Label: "按上下键操作：",
+		Items: labels,
+		Size:  25,
+	}
+
 	for {
-		selectIdx, err := getMainSelection(mainItems)
+		_, result, err := prompt.Run()
 		if err != nil {
-			return err
+			os.Exit(-1)
 		}
-		switch selectIdx {
-		case selectChangeSources:
-			err = promptForSources()
-			if err == errContinue {
-				continue MAINLOOP
+
+		for _, it := range items {
+			if it.label == result {
+				err := it.action()
+				if err == errContinue {
+					goto CONTINUE
+				}
+				return err
 			}
-			return err
-		case selectInstallDocker:
-			err = promptForDocker()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectInstallIstore:
-			err = promptForIstore()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectInstallWindows:
-			err = promptInstallWindows()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectInstallUbuntu:
-			err = promptForUbuntu()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectOneClickGPUPassThrough:
-			err = promptForGPUPassThrough()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectInstallDD:
-			err = promptForDDPresets()
-			if err == errContinue {
-				continue MAINLOOP
-			}
-			return err
-		case selectQuit:
-			break MAINLOOP
 		}
+		// "q" or unrecognized → exit
+		break
+	CONTINUE:
 	}
 
 	return nil

@@ -24,35 +24,8 @@ type ddPresetInstallInfo struct {
 	DownloadOnly bool
 }
 
-func promptForDDPresets() error {
-	categories := vmdownloader.AllDDPresetCategories()
-
-	var presets []vmdownloader.DDPreset
-	for _, cat := range categories {
-		presets = append(presets, cat.Presets...)
-	}
-
-	var labels []string
-	for _, p := range presets {
-		labels = append(labels, fmt.Sprintf("%-22s %s", p.Name, p.Description))
-	}
-	labels = append(labels, "自定义URL（手动输入DD镜像地址）")
-
-	prompt := promptui.Select{
-		Label: "选择要安装的系统（共20+，按上下键翻页）",
-		Items: labels,
-		Size:  25,
-	}
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return errContinue
-	}
-
-	if idx >= len(presets) {
-		return promptForDD()
-	}
-
-	return installFromDDPreset(presets[idx])
+func makeDDPresetAction(p vmdownloader.DDPreset) func() error {
+	return func() error { return installFromDDPreset(p) }
 }
 
 func installFromDDPreset(preset vmdownloader.DDPreset) error {
