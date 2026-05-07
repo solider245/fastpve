@@ -1,117 +1,90 @@
-# fastpve
+# FastPVE Plus
 
-PVE 一键装机工具，在 Proxmox VE 宿主机上跑一个脚本，按提示选系统、配 CPU/内存/磁盘，自动下载镜像并创建虚拟机。论坛讨论：https://www.koolcenter.com/t/topic/7777
+PVE 一键装机工具，20+ 系统可选。在 Proxmox VE 宿主机上跑一行命令，按提示选系统、配 CPU/内存/磁盘，自动下载镜像并创建虚拟机。
 
-## 装好的系统
-
-内置支持四种：
-
-| 菜单 | 说明 |
-|------|------|
-| iStoreOS | 软路由，从官方镜像导入 |
-| Windows 11/10/7 | 自动下载 ISO + VirtIO 驱动，UEFI/SeaBIOS 自适应 |
-| Ubuntu | 22.04 / 24.10 / 25.04，桌面版/服务器版 |
-| Docker | 在 PVE 宿主机直接装 Docker |
-
-除此之外的系统（OpenWRT 其他分支、黑群晖、Windows Server、Linux 各发行版等），走 **DD 镜像模式**。去 [dd.wiseadvice.cc](https://dd.wiseadvice.cc)、[dd.nat.ee](https://dd.nat.ee) 等 DD 重装站点拿到 `.img` 或 `.img.gz` 的直链，输进去就能装。
+论坛讨论：https://www.koolcenter.com/t/topic/7777
 
 ## 安装
 
-### 官方稳定版（不含 DD 模式）
-
-在 PVE 宿主机上执行：
-
 ```bash
-bash -c "$(curl -sSL https://www.linkease.com/rd/fastpve/)"
+bash -c "$(curl -sSL https://raw.githubusercontent.com/solider245/fastpve/main/dd-install.sh)"
 ```
 
-### Fork 版（含 DD 镜像模式）
+脚本自动下载最新 FastPVE Plus 二进制（SHA256 校验），然后拉起交互菜单。
 
-本 fork 新增了 DD 镜像安装功能，尚未合入上游。使用方式：
+## 支持的系统
 
-```bash
-# 1. 克隆 fork
-git clone https://github.com/solider245/fastpve.git
-cd fastpve
+### 内置安装（官方方式）
 
-# 2. 编译（需要 Go 1.23+）
-make build          # 交互版 FastPVE
-make download       # 命令行下载器 fastpve-download
+| 系统 | 说明 |
+|------|------|
+| iStoreOS | 软路由，官方镜像导入 |
+| Windows 11/10/7 | ISO + VirtIO 驱动，UEFI/SeaBIOS 自适应 |
+| Ubuntu 22.04/24.10/25.04 | 桌面版 / 服务器版 |
+| Docker | PVE 宿主机直接安装 |
 
-# 3. 运行
-./bin/FastPVE
-```
+### DD 镜像安装（20+ 系统）
 
-编译产物：
-- `bin/FastPVE` — 交互式菜单（含 DD 镜像安装）
-- `bin/fastpve-download` — 命令行下载工具（含 `dd` 子命令）
+底层统一走 DD 镜像导入。选择「DD-安装更多系统」→ 选分类 → 选系统 → 自动下载安装。
 
-## 使用
+**软路由 / 防火墙**
 
-### 交互模式
+| 系统 | BIOS | 说明 |
+|------|------|------|
+| OpenWRT 官方 | UEFI | 开源路由系统 |
+| ImmortalWrt | UEFI | OpenWRT 社区增强分支 |
+| iStoreOS DD版 | UEFI | KoolCenter 软路由 |
+| RouterOS CHR | BIOS | MikroTik 路由系统 |
+| pfSense CE | UEFI | FreeBSD 企业级防火墙 |
+| OPNsense | UEFI | pfSense 分支，UI 更现代 |
 
-装好后运行 `fastpve`，上下键选择：
+**NAS / 存储**
 
-```
-0、更换软件源
-1、安装Docker
-2、安装iStoreOS
-3、安装Windows
-4、安装Ubuntu
-5、一键核显直通
-6、安装DD镜像     ← 内置系统之外的都走这里
-q、退出
-```
+| 系统 | BIOS | 说明 |
+|------|------|------|
+| 群晖 DSM (RR) | UEFI | Redpill Recovery 引导 |
+| TrueNAS Scale | UEFI | 开源企业级 NAS |
+| OpenMediaVault | UEFI | Debian 系轻量 NAS |
+| 飞牛私有云 | UEFI | 国产 NAS，照片管理出色 |
 
-每个选项都会引导你选版本 → 配 CPU/内存/磁盘 → 下载镜像 → 创建虚拟机。
+**Windows**
 
-### DD 镜像怎么用
+| 系统 | BIOS | 说明 |
+|------|------|------|
+| Windows Server 2025 | UEFI | 数据中心版 |
+| Windows Server 2022 | UEFI | 数据中心版 |
+| Windows 11 LTSC | UEFI | 精简长期版 |
+| Windows 10 LTSC | UEFI | 最稳定精简版 |
 
-场景：想装一个 FastPVE 没有内置的系统。流程：
+**Linux 服务器**
 
-1. 去 DD 重装站点找对应系统的 raw 镜像直链（比如 `https://xxx.dd/WinServer2025.img.gz`）
-2. 在 FastPVE 菜单选 `6、安装DD镜像`
-3. 选择「输入URL下载新镜像」，粘贴直链
-4. 选择 BIOS 模式：**UEFI (OVMF)** 对应 GPT 镜像，**SeaBIOS** 对应 MBR 镜像（镜像站一般会标注）
-5. 配好 CPU/内存/磁盘，确认安装
+| 系统 | BIOS | 说明 |
+|------|------|------|
+| Debian 12 | UEFI | 通用服务器 |
+| Rocky Linux 9 | UEFI | RHEL 兼容 |
+| Arch Linux | UEFI | 滚动更新 |
+| Alpine Linux | UEFI | 超轻量 |
 
-也支持先下载后安装：选「仅下载」，镜像保存到 `/var/lib/vz/template/iso/`，之后可以反复装。
+**其他**
 
-### 命令行下载
-
-不跑菜单，纯下载镜像到本地：
-
-```bash
-# 下载 DD 镜像
-fastpve-download dd --url https://example.com/windows-server.img.gz
-
-# 断点续传（下载中断后）
-fastpve-download dd --resume
-```
-
-支持的压缩格式：`.gz`、`.xz`、`.zst`/`.zstd`，以及未压缩的 `.img`。
+| 系统 | BIOS | 说明 |
+|------|------|------|
+| Home Assistant OS | UEFI | 智能家居中枢 |
+| 自定义 URL | 自选 | 手动输入任意 DD 镜像地址 |
 
 ## 镜像来源
 
-本项目默认优先从官方地址下载，失败则回退到 [GitHub Packages](https://github.com/orgs/kspeeder/packages)，不对镜像做任何修改。
+内置系统优先从官方地址下载，DD 系统优先使用各项目官方 Release 镜像。所有镜像均不做修改。
 
 ## 编译
 
 ```bash
-make build          # FastPVE
-make build-remote   # FastPVE (带远程 URL 缓存)
+git clone https://github.com/solider245/fastpve.git
+cd fastpve
+make build          # FastPVE Plus
 make download       # fastpve-download
 ```
 
-## ⚠️ 免责声明
+## 免责声明
 
-- **合法合规使用**：本存储库旨在为大家方便安装虚拟机。使用者应严格遵守所在司法辖区法律法规及相关平台服务条款，任何非法用途的法律责任由使用者自行承担
-- **非关联性与独立责任**：本存储库与各第三方平台不存在任何隶属、代理或合作关系。任何基于本存储库的 fork、二次开发、再分发或衍生版本均由其维护者独立承担全部责任；作者、维护者及贡献者不对衍生存储库的任何行为或后果承担法律或连带责任
-- **无担保与免责条款**：在适用法律允许的最大范围内，本存储库按"现状（AS IS）"提供，不提供任何明示或暗示担保（包括但不限于适销性、特定用途适用性、非侵权等）。对因使用本存储库而造成的任何直接或间接损失（包括但不限于数据丢失、业务中断、利润损失等），作者、维护者及贡献者不承担任何责任
-- **风险自担原则**：使用者应自行评估使用风险，确保其使用行为合法合规，不侵犯第三方权益，不得将本存储库用于任何违法、侵权、恶意或不当用途
-- **第三方平台合规**：使用者应遵守相关平台的服务条款、API 使用政策、速率限制及版权要求，避免对源平台造成过载或干扰。各平台对其内容、服务及政策拥有最终解释权
-- **知识产权保护**：通过本存储库获取的内容受相应版权法保护。使用者应遵守相关许可协议、版权声明及使用条款，不得从事任何侵犯知识产权的行为
-- **安全防护建议**：虽然本存储库采用无日志架构，不存储用户请求数据，但基于互联网传输的固有风险，建议使用者对下载内容进行安全扫描，尤其对可执行文件、脚本等保持谨慎
-- **开源性质声明**：本存储库为开源项目，作者与贡献者不承担提供技术支持、错误修复或持续维护的义务。外部贡献的合并不代表对特定用途或效果的承诺与背书
-- **名称使用规范**：严禁任何可能暗示作者或贡献者提供商业合作、技术支持、担保或背书的表述。涉及存储库名称或作者标识的使用应遵循相关法律法规及通用规范
-- **免责声明更新**：本免责声明可能随存储库发展或法律环境变化进行更新修订。使用者继续使用、复制、分发或修改本存储库即视为接受最新版本的免责声明
+本存储库旨在方便安装虚拟机。使用者应遵守所在司法辖区法律法规及相关平台服务条款，对自身使用行为承担全部责任。本存储库按"现状（AS IS）"提供，不提供任何明示或暗示担保。

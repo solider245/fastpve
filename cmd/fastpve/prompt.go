@@ -35,7 +35,7 @@ var (
 		"4、安装Ubuntu":   selectInstallUbuntu,
 		// 目前只做Intel核显直通
 		"5、一键核显直通":   selectOneClickGPUPassThrough,
-		"6、安装DD镜像":    selectInstallDD,
+		"6、DD-安装更多系统":  selectInstallDD,
 		"q、退出":       selectQuit,
 	}
 )
@@ -113,7 +113,7 @@ MAINLOOP:
 			}
 			return err
 		case selectInstallDD:
-			err = promptForDD()
+			err = promptForDDPresets()
 			if err == errContinue {
 				continue MAINLOOP
 			}
