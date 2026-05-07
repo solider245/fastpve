@@ -172,7 +172,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 			Presets: []DDPreset{
 				{
 					Name:        "Windows Server 2025",
-					Description: "数据中心版，需自行激活",
+					Description: "数据中心版，需自行激活（推荐去 dd.wiseadvice.cc 获取DD直链）",
 					URLs:        []string{},
 					BIOS:        BIOSUEFI,
 					OSType:      "win11",
@@ -183,7 +183,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 				},
 				{
 					Name:        "Windows Server 2022",
-					Description: "数据中心版，需自行激活",
+					Description: "数据中心版，需自行激活（推荐去 dd.wiseadvice.cc 获取DD直链）",
 					URLs:        []string{},
 					BIOS:        BIOSUEFI,
 					OSType:      "win10",
@@ -194,7 +194,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 				},
 				{
 					Name:        "Windows 11 LTSC",
-					Description: "精简长期版，无商店和 Edge",
+					Description: "精简长期版，无商店和 Edge（推荐去 dd.wiseadvice.cc 获取DD直链）",
 					URLs:        []string{},
 					BIOS:        BIOSUEFI,
 					OSType:      "win11",
@@ -205,7 +205,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 				},
 				{
 					Name:        "Windows 10 LTSC",
-					Description: "最稳定的 Windows 精简版",
+					Description: "最稳定的 Windows 精简版（推荐去 dd.wiseadvice.cc 获取DD直链）",
 					URLs:        []string{},
 					BIOS:        BIOSUEFI,
 					OSType:      "win10",
@@ -223,7 +223,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 					Name:        "Debian 12",
 					Description: "最通用的 Linux 服务器发行版",
 					URLs: []string{
-						"https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.raw",
+						"https://mirrors.tuna.tsinghua.edu.cn/debian/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.raw",
 					},
 					BIOS:        BIOSUEFI,
 					OSType:      "l26",
@@ -236,7 +236,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 					Name:        "Rocky Linux 9",
 					Description: "RHEL 9 兼容发行版，企业级稳定",
 					URLs: []string{
-						"https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2",
+						"https://mirrors.ustc.edu.cn/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2",
 					},
 					BIOS:        BIOSUEFI,
 					OSType:      "l26",
@@ -249,7 +249,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 					Name:        "Arch Linux",
 					Description: "滚动更新，始终最新",
 					URLs: []string{
-						"https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2",
+						"https://mirrors.tuna.tsinghua.edu.cn/archlinux/images/latest/Arch-Linux-x86_64-cloudimg.qcow2",
 					},
 					BIOS:        BIOSUEFI,
 					OSType:      "l26",
@@ -262,7 +262,7 @@ func AllDDPresetCategories() []DDPresetCategory {
 					Name:        "Alpine Linux",
 					Description: "超轻量，适合容器和基础服务",
 					URLs: []string{
-						"https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/alpine-virt-3.22.1-x86_64.iso",
+						"https://mirrors.ustc.edu.cn/alpine/latest-stable/releases/x86_64/alpine-virt-3.22.1-x86_64.iso",
 					},
 					BIOS:        BIOSUEFI,
 					OSType:      "l26",

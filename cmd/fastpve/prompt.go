@@ -47,6 +47,12 @@ func mainPrompt() error {
 		action: promptForDD,
 	})
 
+	// Quit
+	items = append(items, menuItem{
+		label:  "q、退出",
+		action: func() error { return nil },
+	})
+
 	labels := make([]string, len(items))
 	for i, it := range items {
 		labels[i] = it.label

@@ -23,16 +23,23 @@ func DownloadDDImage(ctx context.Context, d Downloader, isoPath, cachePath, stat
 		}
 		return decompressDD(ctx, cachePath, isoPath, status.TargetFile)
 	case url != "":
-		headSize, headModTime, err := d.HeadInfo(url)
+		downloadURL := url
+		if strings.Contains(url, "github.com") {
+			proxyURL := strings.Replace(url, "github.com", "gh.linkease.net:5443", 1)
+			if _, _, err := d.HeadInfo(proxyURL); err == nil {
+				downloadURL = proxyURL
+			}
+		}
+		headSize, headModTime, err := d.HeadInfo(downloadURL)
 		if err != nil {
 			return "", fmt.Errorf("cannot reach download URL: %w", err)
 		}
-		fileName := path.Base(url)
+		fileName := path.Base(downloadURL)
 		if fileName == "" || fileName == "." || fileName == "/" {
 			return "", fmt.Errorf("cannot determine filename from URL: %s", url)
 		}
 		status = &downloader.DownloadStatus{
-			Url:        url,
+			Url:        downloadURL,
 			TargetFile: filepath.Join(cachePath, fileName),
 			TotalSize:  headSize,
 			ModTime:    headModTime,
