@@ -7,7 +7,8 @@ set -euo pipefail
 VERSION="0.1.9-dd1"
 REPO="solider245/fastpve"
 BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
-PROXY="https://gh.565600.xyz/"
+KSPEEDER="https://gh.linkease.net:5443"
+FALLBACK_PROXY="https://gh.565600.xyz/"
 TEMP_DIR="${TEMP_DIR:-/tmp}"
 INSTALL_DIR="/usr/local/bin"
 
@@ -27,13 +28,19 @@ fi
 
 download_file() {
     local url=$1 dest=$2
-    local cn_url="${PROXY}${url}"
+    # KSspeeder local proxy (preferred), then public fallback
+    local ks_url="${KSPEEDER}/${REPO}/releases/download/v${VERSION}/$(basename "$dest")"
+    local fb_url="${FALLBACK_PROXY}${url}"
 
-    info "downloading $(basename "$dest") via proxy ..."
+    info "downloading $(basename "$dest") ..."
     if command -v curl &>/dev/null; then
-        curl -fL --connect-timeout 5 --max-time 600 --progress-bar -o "$dest" "$cn_url"
+        curl -fL --connect-timeout 3 --max-time 600 --progress-bar -o "$dest" "$ks_url" || \
+        (info "retrying via fallback proxy..." && \
+         curl -fL --connect-timeout 5 --max-time 600 --progress-bar -o "$dest" "$fb_url")
     elif command -v wget &>/dev/null; then
-        wget -q --timeout=5 --show-progress -O "$dest" "$cn_url"
+        wget -q --timeout=3 --show-progress -O "$dest" "$ks_url" || \
+        (info "retrying via fallback proxy..." && \
+         wget -q --timeout=5 --show-progress -O "$dest" "$fb_url")
     else
         error "curl or wget is required."
         exit 1

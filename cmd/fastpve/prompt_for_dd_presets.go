@@ -27,47 +27,60 @@ type ddPresetInstallInfo struct {
 func promptForDDPresets() error {
 	categories := vmdownloader.AllDDPresetCategories()
 
-	var catNames []string
-	for _, cat := range categories {
-		label := fmt.Sprintf("%s (%d个系统)", cat.Name, len(cat.Presets))
-		catNames = append(catNames, label)
+	type flatItem struct {
+		isSeparator bool
+		label       string
+		preset      *vmdownloader.DDPreset
 	}
-	catNames = append(catNames, "自定义URL（手动输入DD镜像地址）")
+
+	var items []flatItem
+	for _, cat := range categories {
+		items = append(items, flatItem{isSeparator: true, label: fmt.Sprintf("── %s ──", cat.Name)})
+		for i := range cat.Presets {
+			p := &cat.Presets[i]
+			items = append(items, flatItem{
+				label:  fmt.Sprintf("    %-22s %s", p.Name, p.Description),
+				preset: p,
+			})
+		}
+	}
+	items = append(items, flatItem{isSeparator: true, label: ""})
+	items = append(items, flatItem{
+		label: "    自定义URL（手动输入DD镜像地址）",
+		preset: &vmdownloader.DDPreset{
+			Name: "自定义URL",
+		},
+	})
+
+	var labels []string
+	for _, it := range items {
+		if it.isSeparator {
+			labels = append(labels, it.label)
+		} else {
+			labels = append(labels, it.label)
+		}
+	}
 
 	prompt := promptui.Select{
-		Label: "选择DD镜像分类",
-		Items: catNames,
+		Label: "选择要安装的系统（共20+）",
+		Items: labels,
+		Size:  25,
 	}
-	catIdx, _, err := prompt.Run()
+	idx, _, err := prompt.Run()
 	if err != nil {
 		return errContinue
 	}
 
-	if catIdx >= len(categories) {
-		return promptForDD()
-	}
-
-	category := categories[catIdx]
-	var sysNames []string
-	for _, p := range category.Presets {
-		sysNames = append(sysNames, fmt.Sprintf("%-25s %s", p.Name, p.Description))
-	}
-	sysNames = append(sysNames, "返回上级菜单")
-
-	sysPrompt := promptui.Select{
-		Label: fmt.Sprintf("%s — 选择系统", category.Name),
-		Items: sysNames,
-	}
-	sysIdx, _, err := sysPrompt.Run()
-	if err != nil {
-		return errContinue
-	}
-	if sysIdx >= len(category.Presets) {
+	item := items[idx]
+	if item.isSeparator {
 		return promptForDDPresets()
 	}
 
-	preset := category.Presets[sysIdx]
-	return installFromDDPreset(preset)
+	if item.preset.Description == "" && len(item.preset.URLs) == 0 {
+		return promptForDD()
+	}
+
+	return installFromDDPreset(*item.preset)
 }
 
 func installFromDDPreset(preset vmdownloader.DDPreset) error {
