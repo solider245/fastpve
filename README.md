@@ -6,19 +6,19 @@ PVE 一键装机工具，20+ 系统可选。在 Proxmox VE 宿主机上跑一行
 
 ## 安装
 
-**海外 / 直连**：
+**海外（直连）**：
 
 ```bash
 bash -c "$(curl -sSL https://raw.githubusercontent.com/solider245/fastpve/main/dd-install.sh)"
 ```
 
-**国内 / 代理**：
+**国内（代理，推荐）**：
 
 ```bash
-bash -c "$(curl -sSL https://gh.565600.xyz/https://raw.githubusercontent.com/solider245/fastpve/main/dd-install.sh)"
+bash -c "$(curl -sSL https://gh.565600.xyz/https://raw.githubusercontent.com/solider245/fastpve/main/dd-install-cn.sh)"
 ```
 
-脚本自动下载 FastPVE Plus 二进制（SHA256 校验），直连失败自动走代理，然后拉起交互菜单。
+脚本下载二进制后自动安装到 `/usr/local/bin/`，之后直接敲 `fastpve` 即可启动。
 
 ## 支持的系统
 

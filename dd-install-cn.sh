@@ -1,15 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# FastPVE Plus — 海外安装脚本（直连优先）
-# Usage: bash -c "$(curl -sSL https://raw.githubusercontent.com/solider245/fastpve/main/dd-install.sh)"
+# FastPVE Plus — 国内安装脚本（代理优先）
+# Usage: bash -c "$(curl -sSL https://gh.565600.xyz/https://raw.githubusercontent.com/solider245/fastpve/main/dd-install-cn.sh)"
 
 VERSION="0.1.9-dd1"
 REPO="solider245/fastpve"
 BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
 PROXY="https://gh.565600.xyz/"
-INSTALL_DIR="/usr/local/bin"
 TEMP_DIR="${TEMP_DIR:-/tmp}"
+INSTALL_DIR="/usr/local/bin"
 
 BINARY="FastPVE-${VERSION}"
 DOWNLOADER="fastpve-download"
@@ -27,20 +27,13 @@ fi
 
 download_file() {
     local url=$1 dest=$2
-    local direct_url="$url"
-    local proxy_url="${PROXY}${url}"
+    local cn_url="${PROXY}${url}"
 
-    info "downloading $(basename "$dest") ..."
-
+    info "downloading $(basename "$dest") via proxy ..."
     if command -v curl &>/dev/null; then
-        # Try direct first, fall back to proxy
-        curl -fL --connect-timeout 3 --max-time 30 --progress-bar -o "$dest" "$direct_url" || \
-        (info "direct failed, retrying via proxy..." && \
-         curl -fL --connect-timeout 5 --max-time 600 --progress-bar -o "$dest" "$proxy_url")
+        curl -fL --connect-timeout 5 --max-time 600 --progress-bar -o "$dest" "$cn_url"
     elif command -v wget &>/dev/null; then
-        wget -q --timeout=3 --show-progress -O "$dest" "$direct_url" || \
-        (info "direct failed, retrying via proxy..." && \
-         wget -q --timeout=5 --show-progress -O "$dest" "$proxy_url")
+        wget -q --timeout=5 --show-progress -O "$dest" "$cn_url"
     else
         error "curl or wget is required."
         exit 1
@@ -48,8 +41,7 @@ download_file() {
 }
 
 verify_sha() {
-    local file=$1 expected=$2
-    local actual
+    local file=$1 expected=$2 actual
     if command -v sha256sum &>/dev/null; then
         actual=$(sha256sum "$file" | awk '{print $1}')
     elif command -v shasum &>/dev/null; then
@@ -60,8 +52,6 @@ verify_sha() {
     fi
     if [[ "$actual" != "$expected" ]]; then
         error "checksum mismatch for $(basename "$file")"
-        error "expected: $expected"
-        error "got:      $actual"
         rm -f "$file"
         exit 1
     fi
@@ -73,9 +63,6 @@ if [[ ! -f "$BIN_PATH" ]]; then
     download_file "${BASE_URL}/${BINARY}" "$BIN_PATH"
     verify_sha "$BIN_PATH" "$SHA_BIN"
     chmod +x "$BIN_PATH"
-else
-    info "$BINARY already cached, verifying..."
-    verify_sha "$BIN_PATH" "$SHA_BIN"
 fi
 
 # Download helper binary
@@ -84,12 +71,7 @@ if [[ ! -f "$DL_PATH" ]]; then
     download_file "${BASE_URL}/${DOWNLOADER}" "$DL_PATH"
     verify_sha "$DL_PATH" "$SHA_DL"
     chmod +x "$DL_PATH"
-else
-    info "$DOWNLOADER already cached, verifying..."
-    verify_sha "$DL_PATH" "$SHA_DL"
 fi
-
-info "FastPVE Plus v${VERSION} — 20+ 系统一键安装"
 
 # Install to system PATH
 info "installing to ${INSTALL_DIR} ..."
@@ -97,6 +79,7 @@ cp "$BIN_PATH" "${INSTALL_DIR}/fastpve"
 cp "$DL_PATH" "${INSTALL_DIR}/fastpve-download"
 info "install complete: fastpve, fastpve-download"
 
+info "FastPVE Plus v${VERSION} — 20+ 系统一键安装"
 info "starting interactive menu..."
 echo ""
 exec "${INSTALL_DIR}/fastpve"
