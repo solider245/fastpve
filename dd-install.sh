@@ -8,6 +8,7 @@ set -euo pipefail
 VERSION="0.1.9-dd1"
 REPO="solider245/fastpve"
 BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
+PROXY="https://gh.565600.xyz/"
 TEMP_DIR="${TEMP_DIR:-/tmp}"
 
 BINARY="FastPVE-${VERSION}"
@@ -26,11 +27,20 @@ fi
 
 download_file() {
     local url=$1 dest=$2
+    local direct_url="$url"
+    local proxy_url="${PROXY}${url}"
+
     info "downloading $(basename "$dest") ..."
+
     if command -v curl &>/dev/null; then
-        curl -fL --progress-bar -o "$dest" "$url"
+        # Try direct first, fall back to proxy
+        curl -fL --connect-timeout 10 --max-time 30 --progress-bar -o "$dest" "$direct_url" || \
+        (info "direct failed, retrying via proxy..." && \
+         curl -fL --connect-timeout 10 --max-time 600 --progress-bar -o "$dest" "$proxy_url")
     elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$dest" "$url"
+        wget -q --timeout=10 --show-progress -O "$dest" "$direct_url" || \
+        (info "direct failed, retrying via proxy..." && \
+         wget -q --timeout=10 --show-progress -O "$dest" "$proxy_url")
     else
         error "curl or wget is required."
         exit 1
