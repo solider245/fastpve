@@ -27,42 +27,19 @@ type ddPresetInstallInfo struct {
 func promptForDDPresets() error {
 	categories := vmdownloader.AllDDPresetCategories()
 
-	type flatItem struct {
-		isSeparator bool
-		label       string
-		preset      *vmdownloader.DDPreset
-	}
-
-	var items []flatItem
+	var presets []vmdownloader.DDPreset
 	for _, cat := range categories {
-		items = append(items, flatItem{isSeparator: true, label: fmt.Sprintf("── %s ──", cat.Name)})
-		for i := range cat.Presets {
-			p := &cat.Presets[i]
-			items = append(items, flatItem{
-				label:  fmt.Sprintf("    %-22s %s", p.Name, p.Description),
-				preset: p,
-			})
-		}
+		presets = append(presets, cat.Presets...)
 	}
-	items = append(items, flatItem{isSeparator: true, label: ""})
-	items = append(items, flatItem{
-		label: "    自定义URL（手动输入DD镜像地址）",
-		preset: &vmdownloader.DDPreset{
-			Name: "自定义URL",
-		},
-	})
 
 	var labels []string
-	for _, it := range items {
-		if it.isSeparator {
-			labels = append(labels, it.label)
-		} else {
-			labels = append(labels, it.label)
-		}
+	for _, p := range presets {
+		labels = append(labels, fmt.Sprintf("%-22s %s", p.Name, p.Description))
 	}
+	labels = append(labels, "自定义URL（手动输入DD镜像地址）")
 
 	prompt := promptui.Select{
-		Label: "选择要安装的系统（共20+）",
+		Label: "选择要安装的系统（共20+，按上下键翻页）",
 		Items: labels,
 		Size:  25,
 	}
@@ -71,16 +48,11 @@ func promptForDDPresets() error {
 		return errContinue
 	}
 
-	item := items[idx]
-	if item.isSeparator {
-		return promptForDDPresets()
-	}
-
-	if item.preset.Description == "" && len(item.preset.URLs) == 0 {
+	if idx >= len(presets) {
 		return promptForDD()
 	}
 
-	return installFromDDPreset(*item.preset)
+	return installFromDDPreset(presets[idx])
 }
 
 func installFromDDPreset(preset vmdownloader.DDPreset) error {
