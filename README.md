@@ -1,72 +1,96 @@
 # fastpve
-One click to run vm in PVE. 对应论坛帖子：https://www.koolcenter.com/t/topic/7777
 
-可以在 PVE 上面一键下载并安装 Windows，iStoreOS，Docker，DD 镜像等等系统。
+PVE 一键装机工具，在 Proxmox VE 宿主机上跑一个脚本，按提示选系统、配 CPU/内存/磁盘，自动下载镜像并创建虚拟机。论坛讨论：https://www.koolcenter.com/t/topic/7777
 
-### This script is meant for quick & easy install:
-#### via curl
-```Bash
+## 装好的系统
+
+内置支持四种：
+
+| 菜单 | 说明 |
+|------|------|
+| iStoreOS | 软路由，从官方镜像导入 |
+| Windows 11/10/7 | 自动下载 ISO + VirtIO 驱动，UEFI/SeaBIOS 自适应 |
+| Ubuntu | 22.04 / 24.10 / 25.04，桌面版/服务器版 |
+| Docker | 在 PVE 宿主机直接装 Docker |
+
+除此之外的系统（OpenWRT 其他分支、黑群晖、Windows Server、Linux 各发行版等），走 **DD 镜像模式**。去 [dd.wiseadvice.cc](https://dd.wiseadvice.cc)、[dd.nat.ee](https://dd.nat.ee) 等 DD 重装站点拿到 `.img` 或 `.img.gz` 的直链，输进去就能装。
+
+## 安装
+
+在 PVE 宿主机上执行下面任意一条：
+
+```bash
+# curl
 bash -c "$(curl -sSL https://www.linkease.com/rd/fastpve/)"
-```
-#### via wget
-```Bash
+
+# wget
 bash -c "$(wget --no-check-certificate -qO- https://www.linkease.com/rd/fastpve/)"
 ```
-##### Or
-```Bash
-cd /tmp; wget --no-check-certificate -O fastpve-install.sh https://www.linkease.com/rd/fastpve/; bash ./fastpve-install.sh
+
+脚本会自动下载最新版 FastPVE 二进制（校验 SHA256），然后拉起交互菜单。
+
+## 使用
+
+### 交互模式
+
+装好后运行 `fastpve`，上下键选择：
+
+```
+0、更换软件源
+1、安装Docker
+2、安装iStoreOS
+3、安装Windows
+4、安装Ubuntu
+5、一键核显直通
+6、安装DD镜像     ← 内置系统之外的都走这里
+q、退出
 ```
 
-### DD 镜像安装
+每个选项都会引导你选版本 → 配 CPU/内存/磁盘 → 下载镜像 → 创建虚拟机。
 
-支持从 URL 下载任意 raw 磁盘镜像（.img / .img.gz / .img.xz / .img.zst），直接导入为虚拟机磁盘。
+### DD 镜像怎么用
 
-**交互式安装（fastpve 菜单）**：
+场景：想装一个 FastPVE 没有内置的系统。流程：
 
-1. 启动 `fastpve`，选择 `6、安装DD镜像`
-2. 选择已有 .img 文件，或输入 URL 下载新镜像
-3. 选择 BIOS 模式：UEFI (OVMF，推荐) 或 SeaBIOS (传统)
-4. 配置 CPU 核数、内存、磁盘大小
-5. 选择「下载并安装」或「仅下载」
+1. 去 DD 重装站点找对应系统的 raw 镜像直链（比如 `https://xxx.dd/WinServer2025.img.gz`）
+2. 在 FastPVE 菜单选 `6、安装DD镜像`
+3. 选择「输入URL下载新镜像」，粘贴直链
+4. 选择 BIOS 模式：**UEFI (OVMF)** 对应 GPT 镜像，**SeaBIOS** 对应 MBR 镜像（镜像站一般会标注）
+5. 配好 CPU/内存/磁盘，确认安装
 
-**命令行下载（fastpve-download）**：
+也支持先下载后安装：选「仅下载」，镜像保存到 `/var/lib/vz/template/iso/`，之后可以反复装。
+
+### 命令行下载
+
+不跑菜单，纯下载镜像到本地：
 
 ```bash
 # 下载 DD 镜像
-fastpve-download dd --url https://example.com/windows11.img.gz
+fastpve-download dd --url https://example.com/windows-server.img.gz
 
-# 指定路径和 BIOS 模式
-fastpve-download dd \
-  --url https://example.com/system.img.xz \
-  --iso-path /var/lib/vz/template/iso \
-  --cache-path /var/lib/vz/template/cache \
-  --bios uefi
-
-# 断点续传
+# 断点续传（下载中断后）
 fastpve-download dd --resume
 ```
 
-**支持的压缩格式**：`.gz` (gzip)、`.xz`、`.zst`/`.zstd`，以及未压缩的 `.img` 文件。
+支持的压缩格式：`.gz`、`.xz`、`.zst`/`.zstd`，以及未压缩的 `.img`。
 
-### 镜像来源
+## 镜像来源
 
-本项目默认会从尽量尝试从官方地址下载 ISO，如果下载失败，则回退到：https://github.com/orgs/kspeeder/packages 这里下载。
-不会对任何镜像进行任何的修改，也欢迎监督。
+本项目默认优先从官方地址下载，失败则回退到 [GitHub Packages](https://github.com/orgs/kspeeder/packages)，不对镜像做任何修改。
 
-#### win7x64
+## 编译
 
-* https://files.dog/MSDN/Windows%207/en_windows_7_ultimate_with_sp1_x64_dvd_u_677332.iso
-* https://archive.org/details/Win7UltimateSP1CHS
-
-## 编译代码
-
-* make build
+```bash
+make build          # FastPVE
+make build-remote   # FastPVE (带远程 URL 缓存)
+make download       # fastpve-download
+```
 
 ## ⚠️ 免责声明
 
 - **合法合规使用**：本存储库旨在为大家方便安装虚拟机。使用者应严格遵守所在司法辖区法律法规及相关平台服务条款，任何非法用途的法律责任由使用者自行承担
 - **非关联性与独立责任**：本存储库与各第三方平台不存在任何隶属、代理或合作关系。任何基于本存储库的 fork、二次开发、再分发或衍生版本均由其维护者独立承担全部责任；作者、维护者及贡献者不对衍生存储库的任何行为或后果承担法律或连带责任
-- **无担保与免责条款**：在适用法律允许的最大范围内，本存储库按“现状（AS IS）”提供，不提供任何明示或暗示担保（包括但不限于适销性、特定用途适用性、非侵权等）。对因使用本存储库而造成的任何直接或间接损失（包括但不限于数据丢失、业务中断、利润损失等），作者、维护者及贡献者不承担任何责任
+- **无担保与免责条款**：在适用法律允许的最大范围内，本存储库按"现状（AS IS）"提供，不提供任何明示或暗示担保（包括但不限于适销性、特定用途适用性、非侵权等）。对因使用本存储库而造成的任何直接或间接损失（包括但不限于数据丢失、业务中断、利润损失等），作者、维护者及贡献者不承担任何责任
 - **风险自担原则**：使用者应自行评估使用风险，确保其使用行为合法合规，不侵犯第三方权益，不得将本存储库用于任何违法、侵权、恶意或不当用途
 - **第三方平台合规**：使用者应遵守相关平台的服务条款、API 使用政策、速率限制及版权要求，避免对源平台造成过载或干扰。各平台对其内容、服务及政策拥有最终解释权
 - **知识产权保护**：通过本存储库获取的内容受相应版权法保护。使用者应遵守相关许可协议、版权声明及使用条款，不得从事任何侵犯知识产权的行为
