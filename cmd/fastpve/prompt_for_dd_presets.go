@@ -110,7 +110,11 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 		info.DownloadOnly = true
 	}
 
-	return downloadAndCreateDDPresetVM(info)
+	err = downloadAndCreateDDPresetVM(info)
+	if err != nil {
+		return err
+	}
+	return errContinue
 }
 
 func downloadAndCreateDDPresetVM(info *ddPresetInstallInfo) error {
@@ -164,8 +168,6 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 	}
 
 	preset := info.Preset
-	vmName := strings.TrimSuffix(info.DDImgName, filepath.Ext(info.DDImgName))
-	vmName = strings.TrimSuffix(vmName, filepath.Ext(vmName))
 
 	biosFlag := "ovmf"
 	if preset.BIOS == vmdownloader.BIOSSeaBIOS {
@@ -181,36 +183,58 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 		ostype = "l26"
 	}
 
-	scripts := []string{
-		"set -e",
-		`export LC_ALL="en_US.UTF-8"`,
-		fmt.Sprintf("export VMID=%d", vmid),
-		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=vmbr0`,
-			vmName, info.Memory, info.Cores, machine, biosFlag),
-	}
+	baseName := strings.ReplaceAll(preset.Name, " ", "")
+	counter := 1
 
-	if preset.BIOS == vmdownloader.BIOSUEFI {
+	for {
+		vmName := baseName
+		if counter > 1 {
+			vmName = fmt.Sprintf("%s-%d", baseName, counter)
+		}
+
+		scripts := []string{
+			"set -e",
+			`export LC_ALL="en_US.UTF-8"`,
+			fmt.Sprintf("export VMID=%d", vmid),
+			fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=vmbr0`,
+				vmName, info.Memory, info.Cores, machine, biosFlag),
+		}
+
+		if preset.BIOS == vmdownloader.BIOSUEFI {
+			scripts = append(scripts,
+				fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m", useDisk),
+			)
+		}
+
 		scripts = append(scripts,
-			fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m", useDisk),
+			fmt.Sprintf("qm set $VMID --scsi0 %s:0,import-from=%s", useDisk, filepath.Join(isoPath, info.DDImgName)),
+			fmt.Sprintf(`qm set $VMID  --scsi1 %s:%d`, useDisk, info.Disk),
+			`qm set $VMID --boot order='scsi0'`,
+			fmt.Sprintf(`qm set $VMID  --ostype %s`, ostype),
+			`echo "VMOK"`,
 		)
-	}
 
-	scripts = append(scripts,
-		fmt.Sprintf("qm set $VMID --scsi0 %s:0,import-from=%s", useDisk, filepath.Join(isoPath, info.DDImgName)),
-		fmt.Sprintf(`qm set $VMID  --scsi1 %s:%d`, useDisk, info.Disk),
-		`qm set $VMID --boot order='scsi0'`,
-		fmt.Sprintf(`qm set $VMID  --ostype %s`, ostype),
-		`echo "VMOK"`,
-	)
+		out, err := utils.BatchOutput(ctx, scripts, 0)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(string(out), "VMOK") {
+			return errors.New("VM creation failed")
+		}
+		fmt.Println("创建虚拟机：", vmid, "成功")
+		counter++
+		vmid++
 
-	out, err := utils.BatchOutput(ctx, scripts, 0)
-	if err != nil {
-		return err
+		anotherPrompt := promptui.Prompt{
+			Label:   "再来一台相同配置？(Y/n)",
+			Default: "Y",
+		}
+		result, err := anotherPrompt.Run()
+		if err != nil || strings.ToUpper(strings.TrimSpace(result)) != "Y" {
+			break
+		}
+		fmt.Println()
 	}
-	if !strings.Contains(string(out), "VMOK") {
-		return errors.New("VM creation failed")
-	}
-	fmt.Println("创建虚拟机：", vmid, "成功")
 	return nil
 }
 

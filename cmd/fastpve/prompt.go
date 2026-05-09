@@ -26,10 +26,12 @@ func mainPrompt() error {
 		menuItem{"3、安装Windows", promptInstallWindows},
 		menuItem{"4、安装Ubuntu", promptForUbuntu},
 		menuItem{"5、一键核显直通", promptForGPUPassThrough},
+		menuItem{"6、VM管理", promptManageVMs},
+		menuItem{"7、镜像管理", promptManageImages},
 	)
 
 	// Inject all DD presets into the main menu
-	idx := 6
+	idx := 8
 	for _, cat := range vmdownloader.AllDDPresetCategories() {
 		for i := range cat.Presets {
 			p := cat.Presets[i]
