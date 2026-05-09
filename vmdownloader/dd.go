@@ -13,7 +13,7 @@ import (
 	"github.com/linkease/fastpve/utils"
 )
 
-func finalImageName(url string) string {
+func FinalImageName(url string) string {
 	fileName := path.Base(url)
 	lower := strings.ToLower(fileName)
 	switch {
@@ -43,7 +43,7 @@ func DownloadDDImage(ctx context.Context, d Downloader, isoPath, cachePath, stat
 		return decompressDD(ctx, cachePath, isoPath, status.TargetFile)
 	case url != "":
 		// Check if the final image already exists in isoPath
-		finalName := finalImageName(url)
+		finalName := FinalImageName(url)
 		if finalName != "" {
 			if _, err := os.Stat(filepath.Join(isoPath, finalName)); err == nil {
 				fmt.Println("镜像已存在:", finalName)

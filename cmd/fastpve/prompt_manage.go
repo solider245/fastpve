@@ -10,6 +10,7 @@ import (
 
 	"github.com/linkease/fastpve/quickget"
 	"github.com/linkease/fastpve/utils"
+	"github.com/linkease/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -53,7 +54,7 @@ func promptManageVMs() error {
 
 	vm := items[vmIdx]
 
-	actions := []string{"启动", "停止", "重启", "删除", "返回"}
+	actions := []string{"启动", "停止", "重启", "查看详情", "删除", "返回"}
 	actPrompt := promptui.Select{
 		Label: fmt.Sprintf("操作 VM %d (%s)", vm.VMID, vm.Name),
 		Items: actions,
@@ -72,6 +73,13 @@ func promptManageVMs() error {
 	case 2:
 		_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm reboot %d", vm.VMID)}, 60)
 	case 3:
+		out, detailErr := utils.BatchOutput(ctx, []string{fmt.Sprintf("qm config %d --current 2>/dev/null || qm config %d", vm.VMID, vm.VMID)}, 5)
+		if detailErr != nil {
+			fmt.Println("获取详情失败:", detailErr)
+		} else {
+				fmt.Printf("VM %d (%s) 详情:\n%s\n", vm.VMID, vm.Name, strings.TrimSpace(string(out)))
+		}
+	case 4:
 		confirmPrompt := promptui.Prompt{
 			Label: fmt.Sprintf("确认删除 VM %d (%s)? (yes/NO)", vm.VMID, vm.Name),
 		}
@@ -79,7 +87,7 @@ func promptManageVMs() error {
 		if strings.ToLower(strings.TrimSpace(confirm)) == "yes" {
 			_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm destroy %d --purge", vm.VMID)}, 120)
 		}
-	case 4:
+	case 5:
 		return errContinue
 	}
 
@@ -132,7 +140,8 @@ func promptManageImages() error {
 				sizeStr = fmt.Sprintf("%.1fKB", float64(s)/1024)
 			}
 		}
-		imgLabels[i] = fmt.Sprintf("%s (%s)", img.Name(), sizeStr)
+		source := getPresetSource(img.Name())
+		imgLabels[i] = fmt.Sprintf("%s (%s) %s", img.Name(), sizeStr, source)
 	}
 	imgLabels[len(images)] = "返回"
 
@@ -146,17 +155,73 @@ func promptManageImages() error {
 	}
 
 	img := images[imgIdx]
-	confirmPrompt := promptui.Prompt{
-		Label: fmt.Sprintf("确认删除 %s? (yes/NO)", img.Name()),
+	imgActions := []string{"删除", "安装", "返回"}
+	imgActPrompt := promptui.Select{
+		Label: fmt.Sprintf("操作: %s", img.Name()),
+		Items: imgActions,
 	}
-	confirm, _ := confirmPrompt.Run()
-	if strings.ToLower(strings.TrimSpace(confirm)) == "yes" {
-		err := os.Remove(filepath.Join(isoPath, img.Name()))
-		if err != nil {
-			fmt.Println("删除失败:", err)
-		} else {
-			fmt.Println("删除成功:", img.Name())
+	imgActIdx, _, err := imgActPrompt.Run()
+	if err != nil {
+		return errContinue
+	}
+	switch imgActIdx {
+	case 0:
+		confirmPrompt := promptui.Prompt{
+			Label: fmt.Sprintf("确认删除 %s? (yes/NO)", img.Name()),
 		}
+		confirm, _ := confirmPrompt.Run()
+		if strings.ToLower(strings.TrimSpace(confirm)) == "yes" {
+			err := os.Remove(filepath.Join(isoPath, img.Name()))
+			if err != nil {
+				fmt.Println("删除失败:", err)
+			} else {
+				fmt.Println("删除成功:", img.Name())
+			}
+		}
+	case 1:
+		fmt.Println()
+		info := &ddInstallInfo{
+			DDImgName: img.Name(),
+			BIOSMode:  -1,
+			Memory:    2048,
+			Cores:     2,
+			Disk:      20,
+		}
+		info.Cores, err = promptPVECoreWithDefault(2)
+		if err != nil {
+			return err
+		}
+		info.Memory, err = promptPVEMemoryWithDefault(2048)
+		if err != nil {
+			return err
+		}
+		info.Disk, err = promptPVEDiskWithDefault(20)
+		if err != nil {
+			return err
+		}
+		info.BIOSMode, err = promptDDBios()
+		if err != nil {
+			return err
+		}
+		ctx := context.TODO()
+		if err := createDDVM(ctx, isoPath, info); err != nil {
+			return err
+		}
+	case 2:
 	}
 	return errContinue
+}
+
+
+func getPresetSource(filename string) string {
+	for _, cat := range vmdownloader.AllDDPresetCategories() {
+		for _, p := range cat.Presets {
+			for _, url := range p.URLs {
+				if vmdownloader.FinalImageName(url) == filename {
+					return "← " + p.Name
+				}
+			}
+		}
+	}
+	return "← 自定义URL"
 }

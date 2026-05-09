@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -75,6 +76,32 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 		return errors.New("镜像URL不能为空")
 	}
 	info.DownloadURL = downloadURL
+
+	// Cache fast-path: if the final image already exists, skip to confirmation
+	isoPath := "/var/lib/vz/template/iso/"
+	if finalName := vmdownloader.FinalImageName(downloadURL); finalName != "" {
+		if _, err := os.Stat(filepath.Join(isoPath, finalName)); err == nil {
+			fmt.Println("  镜像已缓存:", finalName)
+			fastItems := []string{"确认安装（推荐配置）", "修改配置", "退出"}
+			fastPrompt := promptui.Select{
+				Label: "快速安装",
+				Items: fastItems,
+			}
+			idx, _, err := fastPrompt.Run()
+			if err != nil || idx == 2 {
+				return errContinue
+			}
+			if idx == 0 {
+				info.DDImgName = finalName
+				err = createDDPresetVM(context.TODO(), isoPath, info)
+				if err != nil {
+					return err
+				}
+				return errContinue
+			}
+			// idx == 1: fall through to normal prompt
+		}
+	}
 
 	var err error
 	fmt.Println()
@@ -186,6 +213,15 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 	baseName := strings.ReplaceAll(preset.Name, " ", "")
 	counter := 1
 
+	bridge := "vmbr0"
+	bridgePrompt := promptui.Prompt{
+		Label:   "网络桥接 (默认 vmbr0)",
+		Default: bridge,
+	}
+	if b, err := bridgePrompt.Run(); err == nil && b != "" {
+		bridge = strings.TrimSpace(b)
+	}
+
 	for {
 		vmName := baseName
 		if counter > 1 {
@@ -196,8 +232,8 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 			"set -e",
 			`export LC_ALL="en_US.UTF-8"`,
 			fmt.Sprintf("export VMID=%d", vmid),
-			fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=vmbr0`,
-				vmName, info.Memory, info.Cores, machine, biosFlag),
+			fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=%s`,
+				vmName, info.Memory, info.Cores, machine, biosFlag, bridge),
 		}
 
 		if preset.BIOS == vmdownloader.BIOSUEFI {
@@ -216,9 +252,19 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 
 		out, err := utils.BatchOutput(ctx, scripts, 0)
 		if err != nil {
+			// Clean up partial VM on failure
+			cleanupErr := utils.BatchRun(ctx, []string{
+				fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
+			}, 10)
+			if cleanupErr != nil {
+				fmt.Println("清理残留失败:", cleanupErr)
+			}
 			return err
 		}
 		if !strings.Contains(string(out), "VMOK") {
+			utils.BatchRun(ctx, []string{
+				fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
+			}, 10)
 			return errors.New("VM creation failed")
 		}
 		fmt.Println("创建虚拟机：", vmid, "成功")
