@@ -13,6 +13,25 @@ import (
 	"github.com/linkease/fastpve/utils"
 )
 
+func finalImageName(url string) string {
+	fileName := path.Base(url)
+	lower := strings.ToLower(fileName)
+	switch {
+	case strings.HasSuffix(lower, ".gz"):
+		return strings.TrimSuffix(fileName, ".gz")
+	case strings.HasSuffix(lower, ".xz"):
+		return strings.TrimSuffix(fileName, ".xz")
+	case strings.HasSuffix(lower, ".zst"), strings.HasSuffix(lower, ".zstd"):
+		name := strings.TrimSuffix(fileName, ".zst")
+		if name == fileName {
+			name = strings.TrimSuffix(fileName, ".zstd")
+		}
+		return name
+	default:
+		return fileName
+	}
+}
+
 func DownloadDDImage(ctx context.Context, d Downloader, isoPath, cachePath, statusPath string, status *downloader.DownloadStatus, url string) (string, error) {
 	switch {
 	case status != nil:
@@ -23,6 +42,15 @@ func DownloadDDImage(ctx context.Context, d Downloader, isoPath, cachePath, stat
 		}
 		return decompressDD(ctx, cachePath, isoPath, status.TargetFile)
 	case url != "":
+		// Check if the final image already exists in isoPath
+		finalName := finalImageName(url)
+		if finalName != "" {
+			if _, err := os.Stat(filepath.Join(isoPath, finalName)); err == nil {
+				fmt.Println("镜像已存在:", finalName)
+				return finalName, nil
+			}
+		}
+
 		downloadURL := url
 		if strings.Contains(url, "github.com") {
 			proxyURL := strings.Replace(url, "github.com", "gh.linkease.net:5443", 1)
