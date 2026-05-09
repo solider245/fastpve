@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,8 +39,9 @@ func promptManageVMs() error {
 		if vm.BootDiskMB > 0 {
 			diskStr = fmt.Sprintf("%dMB", vm.BootDiskMB)
 		}
-		vmLabels[i] = fmt.Sprintf("%d: %s [%s] MEM:%s DISK:%s",
-			vm.VMID, vm.Name, vm.Status, memStr, diskStr)
+		ipStr := getVMIP(vm.VMID)
+		vmLabels[i] = fmt.Sprintf("%d: %s [%s] MEM:%s DISK:%s IP:%s",
+			vm.VMID, vm.Name, vm.Status, memStr, diskStr, ipStr)
 	}
 	vmLabels[len(items)] = "返回"
 
@@ -187,15 +189,7 @@ func promptManageImages() error {
 			Cores:     2,
 			Disk:      20,
 		}
-		info.Cores, err = promptPVECoreWithDefault(2)
-		if err != nil {
-			return err
-		}
-		info.Memory, err = promptPVEMemoryWithDefault(2048)
-		if err != nil {
-			return err
-		}
-		info.Disk, err = promptPVEDiskWithDefault(20)
+		info.Cores, info.Memory, info.Disk, err = promptConfigTemplate(2, 2048, 20)
 		if err != nil {
 			return err
 		}
@@ -224,4 +218,51 @@ func getPresetSource(filename string) string {
 		}
 	}
 	return "← 自定义URL"
+}
+
+
+func getVMIP(vmid int) string {
+	out, err := utils.BatchOutput(context.TODO(), []string{
+		fmt.Sprintf("qm agent %d network-get-interfaces 2>/dev/null || true", vmid),
+	}, 5)
+	if err != nil {
+		return "-"
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		return "-"
+	}
+	ifaces, ok := result["result"].([]interface{})
+	if !ok {
+		return "-"
+	}
+	var ips []string
+	for _, iface := range ifaces {
+		m, ok := iface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if m["name"] == "lo" {
+			continue
+		}
+		addrs, ok := m["ip-addresses"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, addr := range addrs {
+			a, ok := addr.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if a["ip-address-type"] == "ipv4" {
+				if ip, ok := a["ip-address"].(string); ok {
+					ips = append(ips, ip)
+				}
+			}
+		}
+	}
+	if len(ips) == 0 {
+		return "-"
+	}
+	return strings.Join(ips, ",")
 }

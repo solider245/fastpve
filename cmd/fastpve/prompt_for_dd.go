@@ -231,6 +231,15 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 	imgName := info.DDImgName
 	vmName := strings.TrimSuffix(imgName, filepath.Ext(imgName))
 
+	bridge := "vmbr0"
+	bridgePrompt := promptui.Prompt{
+		Label:   "网络桥接 (默认 vmbr0)",
+		Default: bridge,
+	}
+	if b, err := bridgePrompt.Run(); err == nil && b != "" {
+		bridge = strings.TrimSpace(b)
+	}
+
 	biosFlag := "ovmf"
 	ostype := "l26"
 	machine := "q35"
@@ -244,12 +253,13 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 		"set -e",
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
-		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=vmbr0`,
+		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=%s`,
 			vmName,
 			info.Memory,
 			info.Cores,
 			machine,
-			biosFlag),
+			biosFlag,
+			bridge),
 	}
 
 	if info.BIOSMode == biosUEFI {
@@ -268,9 +278,15 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 
 	out, err := utils.BatchOutput(ctx, scripts, 0)
 	if err != nil {
+		utils.BatchRun(ctx, []string{
+			fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
+		}, 10)
 		return err
 	}
 	if !strings.Contains(string(out), "VMOK") {
+		utils.BatchRun(ctx, []string{
+			fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
+		}, 10)
 		return errors.New("VM creation failed")
 	}
 	fmt.Println("创建虚拟机：", vmid, "成功")
