@@ -1,17 +1,32 @@
 #!/bin/bash
 set -euo pipefail
-# FastPVE Plus installer — 国内（代理）
+# FastPVE Plus installer — 国内（代理）+ 多回退
 # Usage: bash -c "$(curl -sSL https://gh.565600.xyz/https://raw.githubusercontent.com/solider245/fastpve/main/dd-install-cn.sh)"
 
 REPO="solider245/fastpve"
-BASE_URL="https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest"
 INSTALL_DIR="/usr/local/bin"
 
 info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 
+download() {
+	local filename="$1"
+	local urls=(
+		"https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest/${filename}"
+		"https://gh.linkease.net:5443/${REPO}/releases/download/latest/${filename}"
+		"https://github.com/${REPO}/releases/download/latest/${filename}"
+	)
+	for u in "${urls[@]}"; do
+		if curl -fSL --progress-bar -o "${INSTALL_DIR}/${filename}" "$u" 2>/dev/null; then
+			return 0
+		fi
+		info "fallback: ${u}"
+	done
+	return 1
+}
+
 info "downloading FastPVE ..."
-curl -fSL --progress-bar -o "${INSTALL_DIR}/fastpve"         "${BASE_URL}/FastPVE"
-curl -fSL --progress-bar -o "${INSTALL_DIR}/fastpve-download" "${BASE_URL}/fastpve-download"
+download "FastPVE"         || { echo "[ERROR] 所有下载源均失败"; exit 1; }
+download "fastpve-download" || { echo "[ERROR] 所有下载源均失败"; exit 1; }
 chmod +x "${INSTALL_DIR}/fastpve" "${INSTALL_DIR}/fastpve-download"
 
 info "FastPVE Plus (latest) — 20+ 系统一键安装"

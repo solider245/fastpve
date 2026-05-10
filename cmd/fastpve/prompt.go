@@ -20,18 +20,16 @@ func mainPrompt() error {
 	var items []menuItem
 
 	items = append(items,
-		menuItem{"0、更换软件源", promptForSources},
-		menuItem{"1、安装Docker", promptForDocker},
-		menuItem{"2、安装iStoreOS", promptForIstore},
-		menuItem{"3、安装Windows", promptInstallWindows},
-		menuItem{"4、安装Ubuntu", promptForUbuntu},
-		menuItem{"5、一键核显直通", promptForGPUPassThrough},
-		menuItem{"6、VM管理", promptManageVMs},
-		menuItem{"7、镜像管理", promptManageImages},
+		menuItem{"0、PVE系统工具", promptSystemTools},
+		menuItem{"1、安装iStoreOS", promptForIstore},
+		menuItem{"2、安装Windows", promptInstallWindows},
+		menuItem{"3、安装Ubuntu", promptForUbuntu},
+		menuItem{"4、VM管理", promptManageVMs},
+		menuItem{"5、镜像管理", promptManageImages},
 	)
 
 	// Inject all DD presets into the main menu
-	idx := 8
+	idx := 6
 	for _, cat := range vmdownloader.AllDDPresetCategories() {
 		for i := range cat.Presets {
 			p := cat.Presets[i]
