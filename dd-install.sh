@@ -1,34 +1,41 @@
 #!/bin/bash
 set -euo pipefail
-# FastPVE Plus installer — put 'fastpve' command on your PATH
+# FastPVE Plus installer — puts 'fastpve' launcher on PATH
 # Usage: bash -c "$(curl -sSL https://raw.githubusercontent.com/solider245/fastpve/main/dd-install.sh)"
 
-REPO="solider245/fastpve"
 INSTALL_DIR="/usr/local/bin"
+STUB="${INSTALL_DIR}/fastpve"
 
-# skip if already installed
-[[ -x "${INSTALL_DIR}/fastpve" && -x "${INSTALL_DIR}/fastpve-download" ]] && exit 0
+# skip if already installed (launcher exists)
+[[ -f "$STUB" ]] && exit 0
 
-info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
+REPO="solider245/fastpve"
+DIR="/var/lib/vz/template/cache"
+mkdir -p "$DIR"
 
-download() {
-	local filename="$1"
-	local urls=(
-		"https://github.com/${REPO}/releases/download/latest/${filename}"
-		"https://gh.linkease.net:5443/${REPO}/releases/download/latest/${filename}"
-		"https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest/${filename}"
-	)
-	for u in "${urls[@]}"; do
-		if curl -fSL --progress-bar -o "${INSTALL_DIR}/${filename}" "$u" 2>/dev/null; then
-			return 0
-		fi
-	done
-	return 1
+cat > "$STUB" << 'LAUNCHER'
+#!/bin/bash
+set -euo pipefail
+DIR="/var/lib/vz/template/cache"
+
+DL() { local n="$1" f="$DIR/$n"
+	if [[ ! -x "$f" ]]; then
+		REPO="solider245/fastpve"
+		for u in "https://github.com/${REPO}/releases/download/latest/${n}" \
+		         "https://gh.linkease.net:5443/${REPO}/releases/download/latest/${n}" \
+		         "https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest/${n}"; do
+			if curl -fSL --progress-bar -o "$f" "$u" 2>/dev/null; then
+				chmod +x "$f"; return 0
+			fi
+		done
+		return 1
+	fi
 }
+echo "[INFO] 首次运行，下载 FastPVE ..."
+DL "FastPVE" && DL "fastpve-download" || { echo "[ERROR] 下载失败"; exit 1; }
 
-info "downloading FastPVE ..."
-download "FastPVE"         || { echo "[ERROR] 下载失败"; exit 1; }
-download "fastpve-download" || { echo "[ERROR] 下载失败"; exit 1; }
-chmod +x "${INSTALL_DIR}/fastpve" "${INSTALL_DIR}/fastpve-download"
+exec "$DIR/FastPVE" "$@"
+LAUNCHER
 
+chmod +x "$STUB"
 echo "安装完成，运行 fastpve 开始使用"
