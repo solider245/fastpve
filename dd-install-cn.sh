@@ -24,7 +24,12 @@ download() {
 	return 1
 }
 
-info "downloading FastPVE ..."
+if [[ -x "${INSTALL_DIR}/fastpve" && -x "${INSTALL_DIR}/fastpve-download" ]]; then
+	info "检测到已安装，直接启动..."
+	exec "${INSTALL_DIR}/fastpve"
+fi
+
+info "downloading FastPVE (~25MB) ..."
 download "FastPVE"         || { echo "[ERROR] 所有下载源均失败"; exit 1; }
 download "fastpve-download" || { echo "[ERROR] 所有下载源均失败"; exit 1; }
 chmod +x "${INSTALL_DIR}/fastpve" "${INSTALL_DIR}/fastpve-download"
