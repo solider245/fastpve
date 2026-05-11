@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/linkease/fastpve/downloader"
 	"github.com/linkease/fastpve/quickget"
@@ -217,7 +218,7 @@ func createIstoreVM(ctx context.Context, isoPath string, info *istoreInstallInfo
 		"set -e",
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
-		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine q35 --bios ovmf --cpu host --net0 virtio,bridge=vmbr0`,
+		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine q35 --bios ovmf --cpu host --net0 virtio,bridge=vmbr0 --agent enabled=1`,
 			vmName,
 			info.Memory,
 			info.Cores),
@@ -238,10 +239,15 @@ func createIstoreVM(ctx context.Context, isoPath string, info *istoreInstallInfo
 	}
 	fmt.Println("创建虚拟机：", vmid, "成功")
 
-	// 不启动虚拟机
-	//err = utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 0)
-	//if err == nil {
-	//	fmt.Println("启动虚拟机成功：", vmid)
-	//}
+	utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
+	fmt.Printf("等待 VM %d 获取IP...\n", vmid)
+	for i := 0; i < 30; i++ {
+		time.Sleep(time.Second)
+		ip := getVMIP(vmid)
+		if ip != "-" {
+			fmt.Printf("VM %d IP: %s\n", vmid, ip)
+			break
+		}
+	}
 	return err
 }

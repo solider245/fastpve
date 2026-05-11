@@ -31,8 +31,18 @@ DL() { local n="$1" f="$DIR/$n"
 		return 1
 	fi
 }
-echo "[INFO] 首次运行，下载 FastPVE ..."
-DL "FastPVE" && DL "fastpve-download" || { echo "[ERROR] 下载失败"; exit 1; }
+echo "[INFO] 首次运行，正在下载 (~25MB) ..."
+if ! DL "FastPVE"; then
+    echo "[ERROR] FastPVE 下载失败，所有镜像源均不可用"
+    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/FastPVE -o /usr/local/bin/fastpve"
+    exit 1
+fi
+if ! DL "fastpve-download"; then
+    echo "[ERROR] fastpve-download 下载失败"
+    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/fastpve-download -o /usr/local/bin/fastpve-download"
+    exit 1
+fi
+echo "[INFO] 下载完成"
 
 exec "$DIR/FastPVE" "$@"
 LAUNCHER

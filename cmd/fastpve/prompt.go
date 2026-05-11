@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/linkease/fastpve/utils"
 	"github.com/linkease/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
@@ -64,6 +67,8 @@ func mainPrompt() error {
 		Size:  25,
 	}
 
+	printPVEStatus()
+
 	for {
 		_, result, err := prompt.Run()
 		if err != nil {
@@ -85,4 +90,15 @@ func mainPrompt() error {
 	}
 
 	return nil
+}
+
+func printPVEStatus() {
+	ctx := context.TODO()
+	verOut, _ := utils.BatchOutput(ctx, []string{"pveversion 2>/dev/null | head -1 || echo 'PVE ?'"}, 3)
+	ver := strings.TrimSpace(string(verOut))
+	memOut, _ := utils.BatchOutput(ctx, []string{"free -h | awk '/Mem/{print $3 \"/\" $2}'"}, 3)
+	mem := strings.TrimSpace(string(memOut))
+	diskOut, _ := utils.BatchOutput(ctx, []string{"df -h / | awk 'NR==2{print $3 \"/\" $2}'"}, 3)
+	disk := strings.TrimSpace(string(diskOut))
+	fmt.Printf("\n  %s | 内存: %s | 磁盘: %s\n\n", ver, mem, disk)
 }

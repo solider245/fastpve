@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/linkease/fastpve/downloader"
 	"github.com/linkease/fastpve/quickget"
@@ -253,7 +254,7 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 		"set -e",
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
-		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=%s`,
+		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=%s --agent enabled=1`,
 			vmName,
 			info.Memory,
 			info.Cores,
@@ -290,5 +291,16 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 		return errors.New("VM creation failed")
 	}
 	fmt.Println("创建虚拟机：", vmid, "成功")
+	// Auto-start and wait for IP
+	utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
+	fmt.Printf("等待 VM %d 获取IP...\n", vmid)
+	for i := 0; i < 30; i++ {
+		time.Sleep(time.Second)
+		ip := getVMIP(vmid)
+		if ip != "-" {
+			fmt.Printf("VM %d IP: %s\n", vmid, ip)
+			break
+		}
+	}
 	return nil
 }

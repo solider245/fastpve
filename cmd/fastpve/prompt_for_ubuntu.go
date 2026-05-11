@@ -234,7 +234,9 @@ func createUbuntuVM(ctx context.Context, isoPath string, info *ubuntuInstallInfo
 		return err
 	}
 	if strings.Contains(string(out), "VMOK") {
-		fmt.Println("创建虚拟机：", vmid, "成功，请到网页端启动虚拟机并继续安装系统")
+		fmt.Println("创建虚拟机：", vmid, "成功，正在启动...")
+		utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
+		fmt.Printf("VM %d 已启动，请在控制台继续安装系统\n", vmid)
 		return nil
 	}
 	return errors.New("VM creation failed")

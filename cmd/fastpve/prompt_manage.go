@@ -56,7 +56,7 @@ func promptManageVMs() error {
 
 	vm := items[vmIdx]
 
-	actions := []string{"启动", "停止", "重启", "查看详情", "删除", "返回"}
+	actions := []string{"启动", "停止", "重启", "控制台", "SSH", "查看详情", "删除", "返回"}
 	actPrompt := promptui.Select{
 		Label: fmt.Sprintf("操作 VM %d (%s)", vm.VMID, vm.Name),
 		Items: actions,
@@ -70,33 +70,54 @@ func promptManageVMs() error {
 	switch actIdx {
 	case 0:
 		_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm start %d", vm.VMID)}, 60)
+		if err == nil {
+			fmt.Printf("VM %d (%s) 已启动\n", vm.VMID, vm.Name)
+		}
 	case 1:
 		_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm stop %d", vm.VMID)}, 60)
+		if err == nil {
+			fmt.Printf("VM %d (%s) 已停止\n", vm.VMID, vm.Name)
+		}
 	case 2:
 		_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm reboot %d", vm.VMID)}, 60)
+		if err == nil {
+			fmt.Printf("VM %d (%s) 已重启\n", vm.VMID, vm.Name)
+		}
 	case 3:
+		fmt.Printf("正在连接 VM %d 控制台...\n", vm.VMID)
+		utils.BatchRunStdout(ctx, []string{fmt.Sprintf("qm terminal %d 2>/dev/null || echo '控制台不可用，请手动运行: qm terminal %d'", vm.VMID, vm.VMID)}, 0)
+	case 4:
+		ip := getVMIP(vm.VMID)
+		if ip != "-" {
+			fmt.Printf("正在SSH连接到 %s...\n", ip)
+			utils.BatchRunStdout(ctx, []string{fmt.Sprintf("ssh -o StrictHostKeyChecking=no root@%s 2>/dev/null || echo 'SSH连接失败，请确认VM内已启用SSH'", ip)}, 0)
+		} else {
+			fmt.Println("VM 暂无IP地址，请先确认网络和guest agent状态")
+		}
+	case 5:
 		out, detailErr := utils.BatchOutput(ctx, []string{fmt.Sprintf("qm config %d --current 2>/dev/null || qm config %d", vm.VMID, vm.VMID)}, 5)
 		if detailErr != nil {
 			fmt.Println("获取详情失败:", detailErr)
 		} else {
-				fmt.Printf("VM %d (%s) 详情:\n%s\n", vm.VMID, vm.Name, strings.TrimSpace(string(out)))
+			fmt.Printf("VM %d (%s) 详情:\n%s\n", vm.VMID, vm.Name, strings.TrimSpace(string(out)))
 		}
-	case 4:
+	case 6:
 		confirmPrompt := promptui.Prompt{
 			Label: fmt.Sprintf("确认删除 VM %d (%s)? (yes/NO)", vm.VMID, vm.Name),
 		}
 		confirm, _ := confirmPrompt.Run()
 		if strings.ToLower(strings.TrimSpace(confirm)) == "yes" {
 			_, err = utils.BatchOutput(ctx, []string{fmt.Sprintf("qm destroy %d --purge", vm.VMID)}, 120)
+			if err == nil {
+				fmt.Printf("VM %d (%s) 已删除\n", vm.VMID, vm.Name)
+			}
 		}
-	case 5:
+	case 7:
 		return errContinue
 	}
 
 	if err != nil {
 		fmt.Println("操作失败:", err)
-	} else {
-		fmt.Println("操作成功")
 	}
 	return errContinue
 }
@@ -143,7 +164,11 @@ func promptManageImages() error {
 			}
 		}
 		source := getPresetSource(img.Name())
-		imgLabels[i] = fmt.Sprintf("%s (%s) %s", img.Name(), sizeStr, source)
+		dateStr := "?"
+		if info != nil {
+			dateStr = info.ModTime().Format("01-02")
+		}
+		imgLabels[i] = fmt.Sprintf("%s (%s %s) %s", img.Name(), sizeStr, dateStr, source)
 	}
 	imgLabels[len(images)] = "返回"
 
