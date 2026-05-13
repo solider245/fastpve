@@ -6,8 +6,12 @@ set -euo pipefail
 INSTALL_DIR="/usr/local/bin"
 STUB="${INSTALL_DIR}/fastpve"
 
-# skip if already installed (launcher exists)
-[[ -f "$STUB" ]] && exit 0
+# skip if already installed
+if [[ -f "$STUB" ]]; then
+    echo "fastpve 已安装，直接运行 fastpve 即可启动"
+    echo "如需重装，请先执行: rm -f $STUB"
+    exit 0
+fi
 
 REPO="solider245/fastpve"
 DIR="/var/lib/vz/template/cache"
@@ -18,28 +22,27 @@ cat > "$STUB" << 'LAUNCHER'
 set -euo pipefail
 DIR="/var/lib/vz/template/cache"
 
-DL() { local n="$1" f="$DIR/$n"
-	if [[ ! -x "$f" ]]; then
+DL() { local n="$1" f="$DIR/$n" last_err
+	if [[ ! -f "$f" ]] && [[ ! -x "$f" ]]; then
 		REPO="solider245/fastpve"
 		for u in "https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest/${n}" \
 		         "https://gh.linkease.net:5443/${REPO}/releases/download/latest/${n}" \
 		         "https://github.com/${REPO}/releases/download/latest/${n}"; do
-			if curl -fSL --progress-bar -o "$f" "$u" 2>/dev/null; then
-				chmod +x "$f"; return 0
-			fi
+			last_err=$(curl -fSL --progress-bar -o "$f" "$u" 2>&1) && { chmod +x "$f"; return 0; }
 		done
+		echo "下载失败: $last_err" >&2
 		return 1
 	fi
 }
 echo "[INFO] 首次运行，正在下载 (~25MB) ..."
 if ! DL "FastPVE"; then
-    echo "[ERROR] FastPVE 下载失败，所有镜像源均不可用"
-    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/FastPVE -o /usr/local/bin/fastpve"
+    echo "[ERROR] FastPVE 下载失败，所有镜像源均不可用" >&2
+    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/FastPVE -o /usr/local/bin/fastpve" >&2
     exit 1
 fi
 if ! DL "fastpve-download"; then
-    echo "[ERROR] fastpve-download 下载失败"
-    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/fastpve-download -o /usr/local/bin/fastpve-download"
+    echo "[ERROR] fastpve-download 下载失败" >&2
+    echo "  请手动下载: curl -fsSL https://github.com/solider245/fastpve/releases/download/latest/fastpve-download -o /usr/local/bin/fastpve-download" >&2
     exit 1
 fi
 echo "[INFO] 下载完成"
