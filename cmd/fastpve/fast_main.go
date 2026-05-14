@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -23,6 +24,25 @@ func main() {
 				Action: func(c *cli.Context) error {
 					fmt.Println(version)
 					return nil
+				},
+			},
+			{
+				Name:  "ai",
+				Usage: "AI 助手 - 自然语言管理 PVE",
+				Action: func(c *cli.Context) error {
+					input := strings.Join(c.Args().Slice(), " ")
+					if input == "" {
+						data, _ := os.ReadFile(os.Stdin.Name())
+						input = strings.TrimSpace(string(data))
+					}
+					return runAI(input)
+				},
+			},
+			{
+				Name:  "pi",
+				Usage: "PI 协议 - JSON 输入输出后端",
+				Action: func(c *cli.Context) error {
+					return runPI()
 				},
 			},
 		},
