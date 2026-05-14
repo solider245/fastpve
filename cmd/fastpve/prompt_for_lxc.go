@@ -22,8 +22,128 @@ type lxcContainer struct {
 	status string
 }
 
+type lxcPreset struct {
+	Name        string
+	Keyword     string // keyword to match in `pveam available`
+	DefHostname string
+	Cores       int
+	Memory      int
+	Disk        int
+}
+
+var lxcPresets = []lxcPreset{
+	{"Ubuntu 24.04 LTS", "ubuntu-24.04", "ubuntu2404", 2, 1024, 8},
+	{"Ubuntu 22.04 LTS", "ubuntu-22.04", "ubuntu2204", 2, 1024, 8},
+	{"Debian 12", "debian-12", "debian12", 2, 1024, 8},
+	{"Debian 11", "debian-11", "debian11", 2, 1024, 8},
+	{"Alpine Latest", "alpine", "alpine", 1, 512, 4},
+	{"CentOS 9 Stream", "centos-9", "centos9", 2, 1024, 8},
+	{"RockyLinux 9", "rockylinux-9", "rocky9", 2, 1024, 8},
+}
+
+func promptQuickCreateLXC() error {
+	items := make([]string, len(lxcPresets)+1)
+	for i, p := range lxcPresets {
+		items[i] = fmt.Sprintf("%s (%d核/%dMB/%dGB)", p.Name, p.Cores, p.Memory, p.Disk)
+	}
+	items[len(lxcPresets)] = "返回"
+
+	prompt := promptui.Select{
+		Label: "选择快速创建的系统",
+		Items: items,
+	}
+	idx, _, err := prompt.Run()
+	if err != nil || idx >= len(lxcPresets) {
+		return errContinue
+	}
+	preset := lxcPresets[idx]
+
+	fmt.Printf("正在查找 %s 模板...\n", preset.Name)
+	out, err := utils.BatchOutput(context.TODO(), []string{"pveam available 2>/dev/null || true"}, 60)
+	if err != nil {
+		return err
+	}
+	templates := parsePveamAvailable(out)
+
+	var matches []lxcTemplate
+	keyword := strings.ToLower(preset.Keyword)
+	for _, t := range templates {
+		if strings.Contains(strings.ToLower(t.name), keyword) {
+			matches = append(matches, t)
+		}
+	}
+	if len(matches) == 0 {
+		return fmt.Errorf("未找到 %s 的可用模板", preset.Name)
+	}
+	selected := matches[len(matches)-1] // latest match
+
+	listOut, _ := utils.BatchOutput(context.TODO(), []string{"pveam list local 2>/dev/null || true"}, 10)
+	needDL := true
+	for _, t := range parsePveamList(listOut) {
+		if t.name == selected.name {
+			needDL = false
+			break
+		}
+	}
+	if needDL {
+		fmt.Printf("正在下载 %s ...\n", selected.name)
+		if err := utils.BatchRunStdout(context.TODO(), []string{
+			fmt.Sprintf("pveam download local %s", selected.name),
+		}, 300); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("模板 %s 已存在\n", selected.name)
+	}
+
+	_, vmid, err := resolveStorageAndVMID()
+	if err != nil {
+		return err
+	}
+
+	hostnamePrompt := promptui.Prompt{
+		Label:   "主机名",
+		Default: preset.DefHostname,
+	}
+	hostname, err := hostnamePrompt.Run()
+	if err != nil {
+		return errContinue
+	}
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		hostname = preset.DefHostname
+	}
+
+	pwdPrompt := promptui.Prompt{
+		Label: "root密码",
+		Mask:  '*',
+	}
+	password, err := pwdPrompt.Run()
+	if err != nil {
+		return errContinue
+	}
+
+	cores, _ := promptIntWithDefault("CPU核数", preset.Cores)
+	memory, _ := promptIntWithDefault("内存 (MB)", preset.Memory)
+	disk, _ := promptIntWithDefault("磁盘 (GB)", preset.Disk)
+	bridge := promptBridge()
+
+	scripts := []string{
+		"set -e",
+		fmt.Sprintf("pct create %d local:vztmpl/%s --hostname %s --password '%s' --rootfs local:%dG --memory %d --cores %d --swap 512 --net0 name=eth0,bridge=%s,ip=dhcp --unprivileged 1 --features nesting=1",
+			vmid, selected.name, hostname, password, disk, memory, cores, bridge),
+		fmt.Sprintf("pct start %d", vmid),
+	}
+	if err = utils.BatchRunStdout(context.TODO(), scripts, 120); err != nil {
+		return err
+	}
+	fmt.Printf("LXC容器 %d (%s) 已创建并启动\n", vmid, hostname)
+	return nil
+}
+
 func promptForLXC() error {
 	items := []menuItem{
+		{"快速创建", promptQuickCreateLXC},
 		{"创建容器", promptCreateLXC},
 		{"管理容器", promptManageLXC},
 		{"模板管理", promptLXCTemplates},
