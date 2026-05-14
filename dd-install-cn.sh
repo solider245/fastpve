@@ -20,7 +20,7 @@ cat > "$STUB" << 'LAUNCHER'
 set -euo pipefail
 DIR="/var/lib/vz/template/cache"
 
-DL() { local n="$1" f="$DIR/$n" last_err
+DL() { local n="$1"; local f="$DIR/$n"; local last_err
 	if [[ ! -f "$f" ]] && [[ ! -x "$f" ]]; then
 		REPO="solider245/fastpve"
 		for u in "https://gh.565600.xyz/https://github.com/${REPO}/releases/download/latest/${n}" \
