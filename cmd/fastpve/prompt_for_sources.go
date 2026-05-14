@@ -143,7 +143,7 @@ func promptDns(info *sourceInfo, notChanged bool) error {
 	}
 	prompt := promptui.Select{
 		Label: "选择DNS：",
-		Items: []string{"223.5.5.5", "119.29.29.29"},
+		Items: items,
 	}
 	idx, _, err := prompt.Run()
 	if err != nil {

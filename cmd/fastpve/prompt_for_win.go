@@ -179,6 +179,8 @@ func promptInstallWindows() error {
 		}
 	}
 	if info.DownloadOnly {
+		fmt.Println("download complete:", info.WindowISO)
+		return nil
 	}
 
 	return createWindowVM(ctx, info)

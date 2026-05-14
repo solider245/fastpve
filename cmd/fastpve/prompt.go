@@ -28,10 +28,11 @@ func mainPrompt() error {
 		menuItem{"3、安装Ubuntu", promptForUbuntu},
 		menuItem{"4、VM管理", promptManageVMs},
 		menuItem{"5、镜像管理", promptManageImages},
+		menuItem{"6、LXC容器管理", promptForLXC},
 	)
 
 	// Inject all DD presets into the main menu
-	idx := 6
+	idx := 7
 	for _, cat := range vmdownloader.AllDDPresetCategories() {
 		for i := range cat.Presets {
 			p := cat.Presets[i]

@@ -6,11 +6,9 @@ set -euo pipefail
 INSTALL_DIR="/usr/local/bin"
 STUB="${INSTALL_DIR}/fastpve"
 
-# skip if already installed
+# skip if already installed — launch directly
 if [[ -f "$STUB" ]]; then
-    echo "fastpve 已安装，直接运行 fastpve 即可启动"
-    echo "如需重装，请先执行: rm -f $STUB"
-    exit 0
+    exec "$STUB" "$@"
 fi
 
 REPO="solider245/fastpve"
