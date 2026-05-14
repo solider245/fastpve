@@ -88,4 +88,5 @@ func collectAndStorePerf() {
 	}
 
 	_ = dbSavePerfSnapshot(s)
+	dbRefreshAssetCache()
 }

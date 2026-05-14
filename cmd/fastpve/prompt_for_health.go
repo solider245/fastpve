@@ -86,6 +86,7 @@ func runHealthCheck() error {
 	}
 
 	fmt.Println("======================================")
+	_ = dbSaveHealthSnapshot("ok", collectHealthReport(context.TODO()))
 	fmt.Println("")
 
 	// Prompt notification check

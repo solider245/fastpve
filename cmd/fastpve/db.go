@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/solider245/fastpve/utils"
 )
 
 var db *sql.DB
@@ -63,6 +66,24 @@ func InitDB() error {
             args TEXT,
             ok BOOLEAN NOT NULL,
             result TEXT
+        )`,
+		`CREATE TABLE IF NOT EXISTS asset_cache (
+            vmid INTEGER NOT NULL,
+            type TEXT NOT NULL CHECK(type IN ('vm','lxc')),
+            name TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT '',
+            vcpus INTEGER DEFAULT 0,
+            memory_mb INTEGER DEFAULT 0,
+            disk_gb REAL DEFAULT 0,
+            first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (vmid, type)
+        )`,
+		`CREATE TABLE IF NOT EXISTS health_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL DEFAULT 'ok',
+            snapshot_text TEXT NOT NULL
         )`,
 	}
 	for _, q := range queries {
@@ -351,4 +372,201 @@ func dbQueryAuditLog(filter, timespan string) (string, error) {
 		b.WriteString("无操作记录\n")
 	}
 	return b.String(), nil
+}
+
+// ==================== 资产缓存 ====================
+
+// dbRefreshAssetCache fetches live VM/CT lists and upserts into asset_cache.
+func dbRefreshAssetCache() {
+	if db == nil {
+		return
+	}
+	ctx := context.TODO()
+
+	// VMs
+	if out, err := utils.BatchOutput(ctx, []string{
+		`qm list 2>/dev/null | awk 'NR>1{printf "%d|vm|%s|%s|%d|%d|%s\n", $1, $2, $3, $4, $5, $6}' || true`,
+	}, 10); err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "|", 7)
+			if len(parts) < 7 {
+				continue
+			}
+			var vmid, vcpus, mem int
+			var disk float64
+			fmt.Sscanf(parts[0], "%d", &vmid)
+			_, _ = fmt.Sscanf(parts[3], "%d", &vcpus)
+			_, _ = fmt.Sscanf(parts[4], "%d", &mem)
+			fmt.Sscanf(parts[6], "%f", &disk)
+			upsertAsset(vmid, "vm", parts[1], parts[2], vcpus, mem, disk)
+		}
+	}
+
+	// LXC
+	if out, err := utils.BatchOutput(ctx, []string{
+		`pct list 2>/dev/null | awk 'NR>1{printf "%d|lxc|%s|%s|%d|%d|%s\n", $1, $2, $3, $4, $5, $6}' || true`,
+	}, 10); err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "|", 7)
+			if len(parts) < 7 {
+				continue
+			}
+			var vmid, vcpus, mem int
+			var disk float64
+			fmt.Sscanf(parts[0], "%d", &vmid)
+			_, _ = fmt.Sscanf(parts[3], "%d", &vcpus)
+			_, _ = fmt.Sscanf(parts[4], "%d", &mem)
+			fmt.Sscanf(parts[6], "%f", &disk)
+			upsertAsset(vmid, "lxc", parts[1], parts[2], vcpus, mem, disk)
+		}
+	}
+
+	// 清理 3 天前消失的资产（已被删除）
+	_, _ = db.Exec("DELETE FROM asset_cache WHERE last_seen < datetime('now', '-3 days')")
+}
+
+func upsertAsset(vmid int, typ, name, status string, vcpus, memMB int, diskGB float64) {
+	_, _ = db.Exec(`INSERT INTO asset_cache (vmid, type, name, status, vcpus, memory_mb, disk_gb, first_seen, last_seen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+		ON CONFLICT(vmid,type) DO UPDATE SET
+			name=excluded.name, status=excluded.status, vcpus=excluded.vcpus,
+			memory_mb=excluded.memory_mb, disk_gb=excluded.disk_gb, last_seen=excluded.last_seen`,
+		vmid, typ, name, status, vcpus, memMB, diskGB)
+}
+
+func dbQueryAssets(filterType, filterStatus string) (string, error) {
+	if db == nil {
+		return "数据库未初始化", nil
+	}
+
+	where := "WHERE 1=1"
+	args := []any{}
+	if filterType != "" {
+		where += " AND type = ?"
+		args = append(args, filterType)
+	}
+	if filterStatus != "" {
+		where += " AND status = ?"
+		args = append(args, filterStatus)
+	}
+
+	rows, err := db.Query(fmt.Sprintf(`
+		SELECT vmid, type, name, status, vcpus, memory_mb, disk_gb
+		FROM asset_cache %s
+		ORDER BY type, vmid
+	`, where), args...)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var b strings.Builder
+	b.WriteString("=== 资产清单 ===\n")
+	b.WriteString(fmt.Sprintf("%-8s %-4s %-20s %-10s %-6s %-8s %s\n",
+		"VMID", "类型", "名称", "状态", "vCPU", "内存", "磁盘"))
+
+	totalVMs, totalCTs := 0, 0
+	totalVCPUs, totalMem, totalDisk := 0, 0, 0.0
+	count := 0
+
+	for rows.Next() {
+		var vmid, vcpus, memMB int
+		var typ, name, status string
+		var diskGB float64
+		if err := rows.Scan(&vmid, &typ, &name, &status, &vcpus, &memMB, &diskGB); err != nil {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("%-8d %-4s %-20s %-10s %-6d %-8d %.1fG\n",
+			vmid, typ, name, status, vcpus, memMB, diskGB))
+		if typ == "vm" {
+			totalVMs++
+		} else {
+			totalCTs++
+		}
+		totalVCPUs += vcpus
+		totalMem += memMB
+		totalDisk += diskGB
+		count++
+	}
+
+	if count == 0 {
+		return "资产缓存为空（采集协程尚未运行）", nil
+	}
+
+	b.WriteString("──────────────────────────────────────────────────────\n")
+	b.WriteString(fmt.Sprintf("合计: %d VM, %d CT | vCPU: %d | 内存: %.1fG | 磁盘: %.1fG\n",
+		totalVMs, totalCTs, totalVCPUs, float64(totalMem)/1024, totalDisk))
+	return b.String(), nil
+}
+
+// ==================== 健康快照 ====================
+
+func dbSaveHealthSnapshot(status, text string) error {
+	if db == nil {
+		return nil
+	}
+	_, err := db.Exec("INSERT INTO health_snapshots (status, snapshot_text) VALUES (?, ?)", status, text)
+	if err != nil {
+		return err
+	}
+	// 保留 30 天
+	_, _ = db.Exec("DELETE FROM health_snapshots WHERE created_at < datetime('now', '-30 days')")
+	return nil
+}
+
+func dbQueryHealthSnapshots(limit int) (string, error) {
+	if db == nil {
+		return "数据库未初始化", nil
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+	rows, err := db.Query(`
+		SELECT created_at, status, snapshot_text
+		FROM health_snapshots ORDER BY created_at DESC LIMIT ?
+	`, limit)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var b strings.Builder
+	b.WriteString("=== 健康快照历史 ===\n")
+	count := 0
+	for rows.Next() {
+		var ts, status, text string
+		if err := rows.Scan(&ts, &status, &text); err != nil {
+			continue
+		}
+		ts = ts[:19]
+		// Take first line of snapshot as summary
+		firstLine := strings.SplitN(text, "\n", 2)[0]
+		b.WriteString(fmt.Sprintf("[%s] %s %s\n", ts, statusIcon(status), firstLine))
+		count++
+	}
+	if count == 0 {
+		b.WriteString("无健康快照记录\n")
+	}
+	return b.String(), nil
+}
+
+func statusIcon(s string) string {
+	switch s {
+	case "ok":
+		return "✅"
+	case "warning":
+		return "⚠️"
+	case "critical":
+		return "🆘"
+	default:
+		return "❓"
+	}
 }

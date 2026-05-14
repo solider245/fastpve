@@ -13,6 +13,7 @@ import (
 func promptStorageTools() error {
 	items := []menuItem{
 		{"存储概览", showStorageOverview},
+		{"性能历史", showPerfHistory},
 		{"备份 /etc/pve 配置", backupPVEConfig},
 		{"清理 journal 日志", cleanJournalLogs},
 		{"返回", func() error { return errContinue }},
@@ -99,4 +100,46 @@ func cleanJournalLogs() error {
 	return utils.BatchRunStdout(ctx, []string{
 		fmt.Sprintf("journalctl --vacuum-size=%s", result),
 	}, 0)
+}
+
+func showPerfHistory() error {
+	fmt.Println("")
+	fmt.Println("========== 性能趋势（过去 24 小时）==========")
+
+	summary, err := dbQueryPerfHistory("24h")
+	if err != nil {
+		return fmt.Errorf("查询失败: %w", err)
+	}
+	fmt.Println(summary)
+
+	// Show latest raw data points (last 10)
+	if db == nil {
+		return nil
+	}
+	rows, err := db.Query(`
+		SELECT collected_at, cpu_load_1m, mem_used_pct, disk_root_used_pct
+		FROM (SELECT *, ROUND(CAST(mem_used_mb AS REAL)/NULLIF(mem_total_mb,1)*100) AS mem_used_pct
+			  FROM perf_history ORDER BY collected_at DESC LIMIT 10)
+		ORDER BY collected_at
+	`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	fmt.Println("最近采样数据:")
+	fmt.Printf("  %-20s %-10s %-8s %s\n", "时间", "CPU", "内存%", "磁盘%")
+	for rows.Next() {
+		var ts string
+		var cpu, mem, disk float64
+		if err := rows.Scan(&ts, &cpu, &mem, &disk); err != nil {
+			continue
+		}
+		ts = ts[:19]
+		fmt.Printf("  %-20s %-10.2f %-8.0f %.0f%%\n", ts, cpu, mem, disk)
+	}
+
+	fmt.Println("==========================================")
+	fmt.Println("")
+	return nil
 }

@@ -44,6 +44,7 @@ func executeTool(tool string, args map[string]any) toolResult {
 	case "health_check":
 		report := collectHealthReport(ctx)
 		result = toolResult{OK: true, Data: report}
+		_ = dbSaveHealthSnapshot("ok", report)
 	case "storage_overview":
 		zpoolOut, _ := utils.BatchOutput(ctx, []string{"zpool list 2>/dev/null || echo '无 ZFS 池'"}, 5)
 		dfOut, _ := utils.BatchOutput(ctx, []string{"df -h / 2>/dev/null"}, 5)
@@ -122,6 +123,28 @@ func executeTool(tool string, args map[string]any) toolResult {
 			}
 		}
 		data, err := dbQueryAuditLog(filter, timespan)
+		if err != nil {
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: data}
+		}
+	case "query_assets":
+		filterType, _ := args["type"].(string)
+		filterStatus, _ := args["status"].(string)
+		data, err := dbQueryAssets(filterType, filterStatus)
+		if err != nil {
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: data}
+		}
+	case "query_health_history":
+		limit := 5
+		if v, ok := args["limit"]; ok {
+			if f, ok := v.(float64); ok {
+				limit = int(f)
+			}
+		}
+		data, err := dbQueryHealthSnapshots(limit)
 		if err != nil {
 			result = toolResult{Error: err.Error()}
 		} else {
@@ -268,6 +291,8 @@ func systemPrompt() string {
 - lxc_list — 列出所有 LXC 容器
 - query_perf_history — 查询性能历史趋势，参数 timespan: 1h/6h/24h/7d/30d
 - query_audit_log — 查询操作审计日志，参数 filter: 工具名, timespan: 时间范围
+  - query_assets — 查询 VM/CT 资产清单（参数 type: vm/lxc, status: running/stopped）
+	- query_health_history — 查询健康快照历史（参数 limit: 条数）
 - backup_network — 备份 /etc/network/interfaces 网络配置
 - remove_sub_nag — 去除 PVE Web UI 订阅弹窗
 - system_update — 运行 apt update && apt dist-upgrade 更新系统
