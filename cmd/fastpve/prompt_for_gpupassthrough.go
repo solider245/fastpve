@@ -14,6 +14,138 @@ import (
 	"github.com/solider245/fastpve/utils"
 )
 
+// diagnoseGPUPassthrough 诊断 GPU 直通环境
+func diagnoseGPUPassthrough() error {
+	ctx := context.TODO()
+	fmt.Println("")
+	fmt.Println("========== GPU 直通环境检测 ==========")
+
+	// 1. 检测 IOMMU 是否开启
+	fmt.Println("[1/6] 检测 IOMMU...")
+	iommuOut, _ := utils.BatchOutput(ctx, []string{
+		`dmesg | grep -E 'IOMMU|DMAR' | head -5 || echo '未检测到 IOMMU 或 DMAR'`,
+	}, 5)
+	fmt.Print(string(iommuOut))
+	iommuOK := strings.Contains(string(iommuOut), "IOMMU") || strings.Contains(string(iommuOut), "DMAR")
+
+	// 2. 检测内核启动参数
+	fmt.Println("[2/6] 检测内核启动参数...")
+	cmdlineOut, _ := utils.BatchOutput(ctx, []string{
+		`cat /proc/cmdline`,
+	}, 3)
+	cmdlineStr := string(cmdlineOut)
+	fmt.Print(cmdlineStr)
+	cmdlineOK := strings.Contains(cmdlineStr, "intel_iommu=on") || strings.Contains(cmdlineStr, "amd_iommu=on")
+
+	// 3. 列出 IOMMU 分组和设备
+	fmt.Println("[3/6] 检测 IOMMU 分组...")
+	groupsOut, _ := utils.BatchOutput(ctx, []string{
+		`find /sys/kernel/iommu_groups/ -type l 2>/dev/null | head -20 || echo '无法获取 IOMMU 分组'`,
+	}, 5)
+	fmt.Print(string(groupsOut))
+	groupsOK := len(groupsOut) > 0 && !strings.Contains(string(groupsOut), "无法获取")
+
+	// 4. 检测 VGA/GPU 设备
+	fmt.Println("[4/6] 检测 GPU 设备...")
+	gpuOut, _ := utils.BatchOutput(ctx, []string{
+		`lspci -nn | grep -E 'VGA|Display|3D' || echo '未检测到 GPU 设备'`,
+	}, 5)
+	fmt.Print(string(gpuOut))
+	gpuOK := !strings.Contains(string(gpuOut), "未检测到")
+
+	// 5. 检测黑名单配置
+	fmt.Println("[5/6] 检测黑名单配置...")
+	blacklistOut, _ := utils.BatchOutput(ctx, []string{
+		`cat /etc/modprobe.d/blacklist.conf 2>/dev/null || echo '无 blacklist.conf'`,
+	}, 3)
+	fmt.Print(string(blacklistOut))
+	blacklistOK := strings.Contains(string(blacklistOut), "blacklist")
+
+	// 6. 检测 vfio-pci 是否已绑定
+	fmt.Println("[6/6] 检测 vfio-pci 绑定...")
+	vfioOut, _ := utils.BatchOutput(ctx, []string{
+		`dmesg | grep 'vfio' | tail -3 || echo '未检测到 vfio 相关消息'`,
+	}, 5)
+	fmt.Print(string(vfioOut))
+	vfioOK := !strings.Contains(string(vfioOut), "未检测到")
+
+	// 汇总显示
+	fmt.Println("")
+	fmt.Println("--- 检测结果 ---")
+
+	checkMark := "✓"
+	crossMark := "✗"
+
+	if iommuOK {
+		fmt.Printf("  %s IOMMU\n", checkMark)
+	} else {
+		fmt.Printf("  %s IOMMU\n", crossMark)
+	}
+	if cmdlineOK {
+		fmt.Printf("  %s 内核启动参数\n", checkMark)
+	} else {
+		fmt.Printf("  %s 内核启动参数\n", crossMark)
+	}
+	if groupsOK {
+		fmt.Printf("  %s IOMMU 分组\n", checkMark)
+	} else {
+		fmt.Printf("  %s IOMMU 分组\n", crossMark)
+	}
+	if gpuOK {
+		fmt.Printf("  %s GPU 设备\n", checkMark)
+	} else {
+		fmt.Printf("  %s GPU 设备\n", crossMark)
+	}
+	if blacklistOK {
+		fmt.Printf("  %s 黑名单配置\n", checkMark)
+	} else {
+		fmt.Printf("  %s 黑名单配置\n", crossMark)
+	}
+	if vfioOK {
+		fmt.Printf("  %s vfio-pci 绑定\n", checkMark)
+	} else {
+		fmt.Printf("  %s vfio-pci 绑定\n", crossMark)
+	}
+
+	// 给出建议
+	fmt.Println("")
+	fmt.Println("--- 建议 ---")
+	if !iommuOK {
+		fmt.Println("  - IOMMU 未开启，请在 BIOS 中开启 VT-d (Intel) 或 AMD-Vi (AMD)")
+		fmt.Println("  - 或在内核启动参数中添加 intel_iommu=on/amd_iommu=on")
+	}
+	if !cmdlineOK {
+		fmt.Println("  - 未检测到 iommu 内核启动参数")
+		fmt.Println("  - 编辑 /etc/default/grub，在 GRUB_CMDLINE_LINUX_DEFAULT 中添加 intel_iommu=on iommu=pt")
+		fmt.Println("  - 然后运行: proxmox-boot-tool refresh 或 update-grub")
+	}
+	if !groupsOK {
+		fmt.Println("  - 无法获取 IOMMU 分组信息，IOMMU 可能未正确启用")
+	}
+	if !gpuOK {
+		fmt.Println("  - 未检测到 GPU 设备，请确认硬件已正确安装")
+	}
+	if !blacklistOK {
+		fmt.Println("  - 未配置 GPU 驱动黑名单")
+		fmt.Println("  - 创建 /etc/modprobe.d/blacklist.conf，添加:")
+		fmt.Println("    blacklist i915")
+		fmt.Println("    blacklist snd_hda_intel")
+		fmt.Println("    blacklist snd_hda_codec_hdmi")
+		fmt.Println("    options vfio_iommu_type1 allow_unsafe_interrupts=1")
+	}
+	if !vfioOK {
+		fmt.Println("  - vfio-pci 未绑定 GPU 设备")
+		fmt.Println("  - 确认 /etc/modules 包含 vfio、vfio_iommu_type1、vfio_pci")
+		fmt.Println("  - 确认 /etc/modprobe.d/i915.conf 配置了正确的设备 ID")
+		fmt.Println("  - 运行 update-initramfs -u 更新内核")
+	}
+	if iommuOK && cmdlineOK && groupsOK && gpuOK && blacklistOK && vfioOK {
+		fmt.Println("  GPU 直通环境已就绪，无需额外操作")
+	}
+
+	return nil
+}
+
 /**
 参照脚本:
 

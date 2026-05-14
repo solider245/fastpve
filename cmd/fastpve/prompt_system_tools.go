@@ -15,15 +15,27 @@ func promptSystemTools() error {
 		{"更换软件源", promptForSources},
 		{"安装Docker", promptForDocker},
 		{"一键核显直通", promptForGPUPassThrough},
+		{"直通环境检测", diagnoseGPUPassthrough},
 		{"去除订阅弹窗", promptRemoveSubscriptionNag},
 		{"安装常用工具", promptInstallCommonTools},
 		{"系统更新", promptSystemUpdate},
 		{"清理旧内核", promptCleanOldKernels},
 		{"ZFS ARC 调优", promptZFSTuning},
 		{"CPU 调度器切换", promptCPUScaling},
+		{"命令行工具箱", promptToolbox},
+		{"存储概览与备份", promptStorageTools},
+		{"网络诊断与安全", promptNetworkTools},
 		{"系统状态与通知", promptHealthCheck},
-		{"返回", func() error { return errContinue }},
+		{"LXC 权限修复", promptLXCPermissionFix},
 	}
+	// Config-as-toggle: AI 助手仅在配置密钥后显示
+	if Cfg != nil && Cfg.AIKey != "" {
+		items = append(items, menuItem{"AI 助手", promptAI})
+	}
+	items = append(items,
+		menuItem{"编辑配置", editConfig},
+		menuItem{"返回", func() error { return errContinue }},
+	)
 
 	labels := make([]string, len(items))
 	for i, it := range items {
@@ -142,6 +154,16 @@ func promptZFSTuning() error {
 	}
 	fmt.Printf("  ZFS ARC 最大值已设置为 %dMB，重启后生效\n", arcMB)
 	return nil
+}
+
+func editConfig() error {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	return utils.BatchRunStdout(context.TODO(), []string{
+		fmt.Sprintf("%s %s", editor, configPath),
+	}, 0)
 }
 
 func promptCPUScaling() error {

@@ -263,8 +263,8 @@ EOF
 REPORT="$REPORT
 $(pveversion 2>/dev/null || echo 'PVE: N/A')
 运行: $(uptime -p | sed 's/up //')
-内存: $(free -h | awk '/Mem/{printf "%s/%s", $3, $2}')
-磁盘: $(df -h / | awk 'NR==2{printf "%s/%s (%s)", $3, $2, $5}')
+内存: $(free -h | awk '/Mem/{printf "%%s/%%s", $3, $2}')
+磁盘: $(df -h / | awk 'NR==2{printf "%%s/%%s (%%s)", $3, $2, $5}')
 VM: $(qm list 2>/dev/null | grep -c running) 运行中
 CT: $(pct list 2>/dev/null | grep -c running) 运行中"
 

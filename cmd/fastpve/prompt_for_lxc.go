@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,6 +104,7 @@ func promptForLXC() error {
 		{"创建容器", promptCreateLXC},
 		{"管理容器", promptManageLXC},
 		{"模板管理", promptLXCTemplates},
+		{"权限修复", promptLXCPermissionFix},
 		{"返回", func() error { return errContinue }},
 	}
 	labels := make([]string, len(items))
@@ -503,4 +505,141 @@ func promptLXCPassword() (string, error) {
 		return "", errContinue
 	}
 	return password, nil
+}
+
+func promptLXCPermissionFix() error {
+	out, err := utils.BatchOutput(context.TODO(), []string{"pct list 2>/dev/null || true"}, 10)
+	if err != nil {
+		return err
+	}
+	containers := parsePCTList(out)
+	if len(containers) == 0 {
+		fmt.Println("当前没有LXC容器")
+		return nil
+	}
+
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].vmid < containers[j].vmid
+	})
+
+	ctLabels := make([]string, len(containers)+1)
+	for i, ct := range containers {
+		ctLabels[i] = fmt.Sprintf("%d [%s]", ct.vmid, ct.status)
+	}
+	ctLabels[len(containers)] = "返回"
+
+	ctPrompt := promptui.Select{
+		Label: "选择要修复权限的LXC容器",
+		Items: ctLabels,
+	}
+	ctIdx, _, err := ctPrompt.Run()
+	if err != nil || ctIdx >= len(containers) {
+		return errContinue
+	}
+	ct := containers[ctIdx]
+
+	cfgOut, _ := utils.BatchOutput(context.TODO(), []string{fmt.Sprintf("pct config %d | grep -i unprivileged", ct.vmid)}, 5)
+	cfgStr := strings.TrimSpace(string(cfgOut))
+	isUnprivileged := strings.Contains(cfgStr, "unprivileged: 1") || cfgStr == ""
+
+	if isUnprivileged {
+		fmt.Printf("CT %d 当前为非特权模式\n", ct.vmid)
+	} else {
+		fmt.Printf("CT %d 当前为特权模式\n", ct.vmid)
+	}
+
+	fixItems := []string{
+		"开启特权模式（简单，安全性降低）",
+		"配置UID映射（安全，配置稍复杂）",
+		"返回",
+	}
+	fixPrompt := promptui.Select{
+		Label: fmt.Sprintf("选择修复方案 (CT %d)", ct.vmid),
+		Items: fixItems,
+	}
+	fixIdx, _, err := fixPrompt.Run()
+	if err != nil {
+		return errContinue
+	}
+
+	switch fixIdx {
+	case 0:
+		return utils.BatchRunStdout(context.TODO(), []string{
+			fmt.Sprintf("pct set %d --unprivileged 0", ct.vmid),
+			fmt.Sprintf("echo 'CT %d 已切换为特权模式，重启后生效'", ct.vmid),
+		}, 10)
+	case 1:
+		subuidPath := "/etc/subuid"
+		subgidPath := "/etc/subgid"
+
+		for _, p := range []string{subuidPath, subgidPath} {
+			if _, err := os.Stat(p); os.IsNotExist(err) {
+				if err := os.WriteFile(p, []byte("root:100000:65536\n"), 0644); err != nil {
+					return fmt.Errorf("创建 %s 失败: %w", p, err)
+				}
+				fmt.Printf("已创建 %s\n", p)
+			} else {
+				data, err := os.ReadFile(p)
+				if err != nil {
+					return fmt.Errorf("读取 %s 失败: %w", p, err)
+				}
+				if !strings.Contains(string(data), "root:100000:65536") {
+					f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0644)
+					if err != nil {
+						return fmt.Errorf("打开 %s 失败: %w", p, err)
+					}
+					if _, err := f.WriteString("root:100000:65536\n"); err != nil {
+						f.Close()
+						return fmt.Errorf("写入 %s 失败: %w", p, err)
+					}
+					f.Close()
+					fmt.Printf("已添加映射到 %s\n", p)
+				}
+			}
+		}
+
+		confPath := fmt.Sprintf("/etc/pve/lxc/%d.conf", ct.vmid)
+		lxcConfigs := []string{
+			"lxc.idmap: u 0 100000 65536",
+			"lxc.idmap: g 0 100000 65536",
+		}
+
+		data, err := os.ReadFile(confPath)
+		if err != nil {
+			return fmt.Errorf("读取配置文件失败: %w", err)
+		}
+
+		content := string(data)
+		hasChanges := false
+		for _, lxcCfg := range lxcConfigs {
+			if !strings.Contains(content, lxcCfg) {
+				content += lxcCfg + "\n"
+				hasChanges = true
+			}
+		}
+
+		if hasChanges {
+			if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
+				return fmt.Errorf("写入配置文件失败: %w", err)
+			}
+			fmt.Println("UID映射配置已添加到容器配置文件")
+			fmt.Printf("请重启 CT %d 以生效\n", ct.vmid)
+		} else {
+			fmt.Println("容器配置文件已包含UID映射配置")
+		}
+
+		restartPrompt := promptui.Prompt{
+			Label: "是否现在重启容器? (yes/NO)",
+		}
+		restart, _ := restartPrompt.Run()
+		if strings.ToLower(strings.TrimSpace(restart)) == "yes" {
+			utils.BatchRunStdout(context.TODO(), []string{
+				fmt.Sprintf("pct restart %d", ct.vmid),
+			}, 60)
+			fmt.Printf("CT %d 已重启\n", ct.vmid)
+		}
+		return nil
+	default:
+		return errContinue
+	}
 }

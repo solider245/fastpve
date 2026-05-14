@@ -13,6 +13,7 @@ func main() {
 		Name:  "fastpve",
 		Usage: "Fast install systems on pve!",
 		Action: func(c *cli.Context) error {
+			InitConfig()
 			return mainPrompt()
 		},
 		Commands: []*cli.Command{

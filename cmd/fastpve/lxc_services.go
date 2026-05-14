@@ -133,6 +133,118 @@ docker run -d --restart=unless-stopped --name portainer \
   portainer/portainer-ce:latest`,
 		PostMessage: "访问 http://%s:9000 初始化 Portainer",
 	},
+	{
+		Name:        "OpenWRT — 软路由系统",
+		Description: "轻量级软路由，支持防火墙/QoS/负载均衡",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "openwrt",
+		Cores:       1, Memory: 256, Disk: 2,
+		Privileged: true,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq docker.io
+systemctl enable --now docker
+docker run -d --restart=unless-stopped --name openwrt --network host --privileged \
+  -v openwrt_data:/etc/openwrt \
+  ghcr.io/solider245/openwrt-docker:latest 2>/dev/null || \
+docker run -d --restart=unless-stopped --name openwrt --network host --privileged \
+  openwrtorg/imagebuilder:latest /sbin/init`,
+		PostMessage: "OpenWRT 已部署，请连接容器控制台进行配置: pct enter %d",
+	},
+	{
+		Name:        "Home Assistant — 智能家居",
+		Description: "开源智能家居平台，支持大量 IoT 设备集成",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "homeassistant",
+		Cores:       2, Memory: 1024, Disk: 8,
+		Privileged: true,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq docker.io
+systemctl enable --now docker
+docker run -d --restart=unless-stopped --name homeassistant \
+  -p 8123:8123 \
+  -v ha_config:/config \
+  ghcr.io/home-assistant/home-assistant:stable`,
+		PostMessage: "访问 http://%s:8123 初始化 Home Assistant",
+	},
+	{
+		Name:        "Jellyfin — 媒体服务器",
+		Description: "开源媒体管理平台，管理电影/音乐/电视节目",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "jellyfin",
+		Cores:       2, Memory: 2048, Disk: 16,
+		Privileged: true,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq docker.io
+systemctl enable --now docker
+mkdir -p /media /config
+docker run -d --restart=unless-stopped --name jellyfin \
+  -p 8096:8096 \
+  -v jellyfin_config:/config \
+  -v /media:/media \
+  jellyfin/jellyfin:latest`,
+		PostMessage: "访问 http://%s:8096 配置 Jellyfin",
+	},
+	{
+		Name:        "WireGuard — VPN 网关",
+		Description: "轻量高速 VPN，用于远程访问内网服务",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "wireguard",
+		Cores:       1, Memory: 256, Disk: 2,
+		Privileged: true,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq wireguard-tools iptables
+mkdir -p /etc/wireguard
+cd /etc/wireguard
+umask 077
+wg genkey | tee privatekey | wg pubkey > publickey
+echo ""
+echo "============================================"
+echo "WireGuard 已安装"
+echo "公钥: $(cat publickey)"
+echo "私钥: $(cat privatekey)"
+echo "请编辑 /etc/wireguard/wg0.conf 配置客户端"
+echo "============================================"`,
+		PostMessage: "容器已创建，执行 pct enter %d 后配置 wg0.conf",
+	},
+	{
+		Name:        "Frp — 内网穿透",
+		Description: "将内网服务暴露到公网，支持 TCP/UDP/HTTP",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "frp",
+		Cores:       1, Memory: 256, Disk: 2,
+		Privileged: false,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq curl
+FRP_VERSION=$(curl -s https://api.github.com/repos/fatedier/frp/releases/latest | grep tag_name | cut -d'"' -f4 | sed 's/v//')
+curl -sSL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" | tar xz -C /usr/local
+ln -sf "/usr/local/frp_${FRP_VERSION}_linux_amd64/frps" /usr/local/bin/frps
+ln -sf "/usr/local/frp_${FRP_VERSION}_linux_amd64/frpc" /usr/local/bin/frpc
+echo "Frp ${FRP_VERSION} 已安装"
+echo "服务端: frps -c frps.toml"
+echo "客户端: frpc -c frpc.toml"`,
+		PostMessage: "Frp 已安装到容器内，pct enter %d 后创建配置文件",
+	},
+	{
+		Name:        "code-server — Web IDE",
+		Description: "浏览器端的 VS Code，随时随地编程",
+		BaseOS:      "ubuntu-24.04",
+		DefHostname: "codeserver",
+		Cores:       1, Memory: 512, Disk: 4,
+		Privileged: false,
+		SetupScript: `set -e
+apt-get update -qq
+apt-get install -y -qq curl
+curl -fsSL https://code-server.dev/install.sh | sh
+systemctl enable --now code-server@$(whoami)
+sed -i 's/127.0.0.1:8080/0.0.0.0:8080/' ~/.config/code-server/config.yaml
+systemctl restart code-server@$(whoami)`,
+		PostMessage: "访问 http://%s:8080 使用 code-server（密码在 ~/.config/code-server/config.yaml）",
+	},
 }
 
 func findLXCTemplate(keyword string) (name string, err error) {
