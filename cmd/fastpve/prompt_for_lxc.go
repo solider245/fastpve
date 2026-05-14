@@ -59,41 +59,9 @@ func promptQuickCreateLXC() error {
 	preset := lxcPresets[idx]
 
 	fmt.Printf("正在查找 %s 模板...\n", preset.Name)
-	out, err := utils.BatchOutput(context.TODO(), []string{"pveam available 2>/dev/null || true"}, 60)
+	templateName, err := findLXCTemplate(preset.Keyword)
 	if err != nil {
 		return err
-	}
-	templates := parsePveamAvailable(out)
-
-	var matches []lxcTemplate
-	keyword := strings.ToLower(preset.Keyword)
-	for _, t := range templates {
-		if strings.Contains(strings.ToLower(t.name), keyword) {
-			matches = append(matches, t)
-		}
-	}
-	if len(matches) == 0 {
-		return fmt.Errorf("未找到 %s 的可用模板", preset.Name)
-	}
-	selected := matches[len(matches)-1] // latest match
-
-	listOut, _ := utils.BatchOutput(context.TODO(), []string{"pveam list local 2>/dev/null || true"}, 10)
-	needDL := true
-	for _, t := range parsePveamList(listOut) {
-		if t.name == selected.name {
-			needDL = false
-			break
-		}
-	}
-	if needDL {
-		fmt.Printf("正在下载 %s ...\n", selected.name)
-		if err := utils.BatchRunStdout(context.TODO(), []string{
-			fmt.Sprintf("pveam download local %s", selected.name),
-		}, 300); err != nil {
-			return err
-		}
-	} else {
-		fmt.Printf("模板 %s 已存在\n", selected.name)
 	}
 
 	_, vmid, err := resolveStorageAndVMID()
@@ -101,26 +69,13 @@ func promptQuickCreateLXC() error {
 		return err
 	}
 
-	hostnamePrompt := promptui.Prompt{
-		Label:   "主机名",
-		Default: preset.DefHostname,
-	}
-	hostname, err := hostnamePrompt.Run()
+	hostname, err := promptLXCBasicInfo(preset.DefHostname)
 	if err != nil {
-		return errContinue
+		return err
 	}
-	hostname = strings.TrimSpace(hostname)
-	if hostname == "" {
-		hostname = preset.DefHostname
-	}
-
-	pwdPrompt := promptui.Prompt{
-		Label: "root密码",
-		Mask:  '*',
-	}
-	password, err := pwdPrompt.Run()
+	password, err := promptLXCPassword()
 	if err != nil {
-		return errContinue
+		return err
 	}
 
 	cores, _ := promptIntWithDefault("CPU核数", preset.Cores)
@@ -131,7 +86,7 @@ func promptQuickCreateLXC() error {
 	scripts := []string{
 		"set -e",
 		fmt.Sprintf("pct create %d local:vztmpl/%s --hostname %s --password '%s' --rootfs local:%dG --memory %d --cores %d --swap 512 --net0 name=eth0,bridge=%s,ip=dhcp --unprivileged 1 --features nesting=1",
-			vmid, selected.name, hostname, password, disk, memory, cores, bridge),
+			vmid, templateName, hostname, password, disk, memory, cores, bridge),
 		fmt.Sprintf("pct start %d", vmid),
 	}
 	if err = utils.BatchRunStdout(context.TODO(), scripts, 120); err != nil {
@@ -144,6 +99,7 @@ func promptQuickCreateLXC() error {
 func promptForLXC() error {
 	items := []menuItem{
 		{"快速创建", promptQuickCreateLXC},
+		{"部署服务", promptDeployLXCService},
 		{"创建容器", promptCreateLXC},
 		{"管理容器", promptManageLXC},
 		{"模板管理", promptLXCTemplates},
@@ -519,4 +475,32 @@ func parsePCTList(out []byte) []lxcContainer {
 		})
 	}
 	return containers
+}
+
+func promptLXCBasicInfo(defHostname string) (string, error) {
+	prompt := promptui.Prompt{
+		Label:   "主机名",
+		Default: defHostname,
+	}
+	hostname, err := prompt.Run()
+	if err != nil {
+		return "", errContinue
+	}
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		hostname = defHostname
+	}
+	return hostname, nil
+}
+
+func promptLXCPassword() (string, error) {
+	prompt := promptui.Prompt{
+		Label: "root密码",
+		Mask:  '*',
+	}
+	password, err := prompt.Run()
+	if err != nil {
+		return "", errContinue
+	}
+	return password, nil
 }
