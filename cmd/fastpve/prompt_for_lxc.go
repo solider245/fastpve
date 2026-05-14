@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
+	"github.com/solider245/fastpve/utils"
 )
 
 type lxcTemplate struct {
@@ -353,9 +353,9 @@ func promptDownloadLXCTemplate() error {
 	tplNames[len(templates)] = "返回"
 
 	prompt := promptui.Select{
-		Label:   "选择要下载的模板",
-		Items:   tplNames,
-		Size:    15,
+		Label: "选择要下载的模板",
+		Items: tplNames,
+		Size:  15,
 	}
 	idx, _, err := prompt.Run()
 	if err != nil || idx >= len(templates) {
@@ -364,9 +364,9 @@ func promptDownloadLXCTemplate() error {
 	selected := templates[idx]
 
 	fmt.Printf("正在下载 %s ...\n", selected.name)
-	return utils.BatchRunStdout(context.TODO(), []string{
-		fmt.Sprintf("pveam download local %s", selected.name),
-	}, 300)
+	url := fmt.Sprintf("https://download.proxmox.com/images/%s/%s", selected.section, selected.name)
+	dest := fmt.Sprintf("/var/lib/vz/template/cache/%s", selected.name)
+	return utils.DownloadFile(url, dest)
 }
 
 func promptRemoveLXCTemplate() error {

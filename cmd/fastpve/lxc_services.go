@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
+	"github.com/solider245/fastpve/utils"
 )
 
 type lxcServicePreset struct {
@@ -163,10 +163,9 @@ func findLXCTemplate(keyword string) (name string, err error) {
 		}
 	}
 	if needDL {
-		fmt.Printf("正在下载 %s ...\n", selected.name)
-		if err := utils.BatchRunStdout(context.TODO(), []string{
-			fmt.Sprintf("pveam download local %s", selected.name),
-		}, 300); err != nil {
+		url := fmt.Sprintf("https://download.proxmox.com/images/%s/%s", selected.section, selected.name)
+		dest := fmt.Sprintf("/var/lib/vz/template/cache/%s", selected.name)
+		if err := utils.DownloadFile(url, dest); err != nil {
 			return "", err
 		}
 	} else {
