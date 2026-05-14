@@ -2,16 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/solider245/fastpve/downloader"
-	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
@@ -31,9 +27,15 @@ type istoreInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
+func (i *istoreInstallInfo) getDisplayName() string    { return filepath.Base(i.IstoreIMG) }
+func (i *istoreInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
+func (i *istoreInstallInfo) getCores() int             { return i.Cores }
+func (i *istoreInstallInfo) getMemory() int            { return i.Memory }
+func (i *istoreInstallInfo) getDisk() int              { return i.Disk }
+
 func promptForIstore() error {
-	isoPath := "/var/lib/vz/template/iso/"
-	cachePath := "/var/lib/vz/template/cache"
+	isoPath := defaultISOPath
+	cachePath := defaultCachePath
 	downer := newDownloader()
 	statusPath := filepath.Join(cachePath, "istore_install.ops")
 	status, _ := vmdownloader.IsStatusValid(downer, statusPath)
@@ -65,14 +67,13 @@ func promptForIstore() error {
 		return err
 	}
 
-	fmt.Println("install=", utils.ToString(info))
 	var needDownload bool
 	// 如果当前有状态文件且选择了断点续传  或  选择了全新下载，则标志着需要下载
 	if (status != nil && info.IstoreIMG == status.TargetFile) ||
 		info.IstoreVer >= 0 {
 		needDownload = true
 	}
-	next, err := promptIstoreDownloadInstall(info, needDownload)
+	next, err := promptDownloadInstall(info, needDownload)
 	if err != nil {
 		return err
 	}
@@ -154,63 +155,10 @@ func getIstoreIMG(dirs []os.DirEntry) []string {
 	return imgFiles
 }
 
-func promptIstoreDownloadInstall(info *istoreInstallInfo, needDownload bool) (bool, error) {
-	var items []string
-	if needDownload {
-		items = []string{"下载并安装", "仅下载", "退出"}
-	} else {
-		items = []string{"安装", "退出"}
-	}
-	prompt := promptui.Select{
-		Label: fmt.Sprintf("选择完成，继续安装%s：（CPU：%d,内存：%dMB,硬盘：%dGB）",
-			filepath.Base(info.IstoreIMG),
-			info.Cores,
-			info.Memory,
-			info.Disk),
-		Items: items,
-	}
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return false, err
-	}
-	if idx == 0 {
-		return true, nil
-	}
-	if needDownload {
-		if idx == 1 {
-			info.DownloadOnly = true
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func createIstoreVM(ctx context.Context, isoPath string, info *istoreInstallInfo) error {
-	disks, err := quickget.DiskStatus()
+	useDisk, vmid, err := resolveStorageAndVMID()
 	if err != nil {
 		return err
-	}
-	useDisk := "local"
-	if len(disks) > 0 {
-		useDisk = disks[0]
-	}
-	for _, disk := range disks {
-		if disk == "local-lvm" {
-			useDisk = "local-lvm"
-			break
-		}
-	}
-
-	items, err := quickget.QMList()
-	if err != nil {
-		return err
-	}
-	vmid := 100
-	if len(items) > 0 {
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].VMID < items[j].VMID
-		})
-		vmid = items[len(items)-1].VMID + 1
 	}
 	imgName := filepath.Base(info.IstoreIMG)
 	vmName := toBetterIstoreName(imgName)
@@ -219,9 +167,7 @@ func createIstoreVM(ctx context.Context, isoPath string, info *istoreInstallInfo
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
 		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine q35 --bios ovmf --cpu host --net0 virtio,bridge=vmbr0 --agent enabled=1`,
-			vmName,
-			info.Memory,
-			info.Cores),
+			vmName, info.Memory, info.Cores),
 		fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m", useDisk),
 		fmt.Sprintf("qm set $VMID --scsi0 %s:0,import-from=%s", useDisk, filepath.Join(isoPath, imgName)),
 		fmt.Sprintf(`qm set $VMID  --scsi1 %s:%d`, useDisk, info.Disk),
@@ -229,25 +175,12 @@ func createIstoreVM(ctx context.Context, isoPath string, info *istoreInstallInfo
 		`qm set $VMID  --ostype l26`,
 		`echo "VMOK"`,
 	}
-	//fmt.Println(strings.Join(scripts, "\n"))
-	out, err := utils.BatchOutput(ctx, scripts, 0)
+	err = runVMCreationScript(ctx, scripts, vmid)
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(string(out), "VMOK") {
-		return errors.New("VM creation failed")
-	}
 	fmt.Println("创建虚拟机：", vmid, "成功")
-
 	utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
-	fmt.Printf("等待 VM %d 获取IP...\n", vmid)
-	for i := 0; i < 30; i++ {
-		time.Sleep(time.Second)
-		ip := getVMIP(vmid)
-		if ip != "-" {
-			fmt.Printf("VM %d IP: %s\n", vmid, ip)
-			break
-		}
-	}
-	return err
+	waitVMIP(ctx, vmid)
+	return nil
 }

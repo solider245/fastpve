@@ -39,15 +39,15 @@ func promptConfigTemplate(defCores, defMemMB, defDiskGB int) (cores, memMB, disk
 	}
 
 	if idx == len(templates) {
-		cores, err = promptPVECoreWithDefault(defCores)
+		cores, err = promptIntWithDefault("CPU核数", defCores)
 		if err != nil {
 			return
 		}
-		memMB, err = promptPVEMemoryWithDefault(defMemMB)
+		memMB, err = promptIntWithDefault("内存大小/MB", defMemMB)
 		if err != nil {
 			return
 		}
-		diskGB, err = promptPVEDiskWithDefault(defDiskGB)
+		diskGB, err = promptIntWithDefault("磁盘大小/GB", defDiskGB)
 		if err != nil {
 			return
 		}

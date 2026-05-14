@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/solider245/fastpve/downloader"
-	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
@@ -34,9 +32,15 @@ type ubuntuInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
+func (i *ubuntuInstallInfo) getDisplayName() string    { return filepath.Base(i.UbuntuISO) }
+func (i *ubuntuInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
+func (i *ubuntuInstallInfo) getCores() int             { return i.Cores }
+func (i *ubuntuInstallInfo) getMemory() int            { return i.Memory }
+func (i *ubuntuInstallInfo) getDisk() int              { return i.Disk }
+
 func promptForUbuntu() error {
-	isoPath := "/var/lib/vz/template/iso/"
-	cachePath := "/var/lib/vz/template/cache"
+	isoPath := defaultISOPath
+	cachePath := defaultCachePath
 	downer := newDownloader()
 	statusPath := filepath.Join(cachePath, "ubuntu_install.ops")
 	status, _ := vmdownloader.IsStatusValid(downer, statusPath)
@@ -68,13 +72,12 @@ func promptForUbuntu() error {
 		return err
 	}
 
-	fmt.Println("install=", utils.ToString(info))
 	var needDownload bool
 	if (status != nil && info.UbuntuISO == status.TargetFile) ||
 		info.UbuntuVer >= 0 {
 		needDownload = true
 	}
-	next, err := promptUbuntuDownloadInstall(info, needDownload)
+	next, err := promptDownloadInstall(info, needDownload)
 	if err != nil {
 		return err
 	}
@@ -152,63 +155,10 @@ func getUbuntuISO(dirs []os.DirEntry) []string {
 	return isoFiles
 }
 
-func promptUbuntuDownloadInstall(info *ubuntuInstallInfo, needDownload bool) (bool, error) {
-	var items []string
-	if needDownload {
-		items = []string{"下载并安装", "仅下载", "退出"}
-	} else {
-		items = []string{"安装", "退出"}
-	}
-	prompt := promptui.Select{
-		Label: fmt.Sprintf("选择完成，继续安装%s：（CPU：%d,内存：%dMB,硬盘：%dGB）",
-			filepath.Base(info.UbuntuISO),
-			info.Cores,
-			info.Memory,
-			info.Disk),
-		Items: items,
-	}
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return false, err
-	}
-	if idx == 0 {
-		return true, nil
-	}
-	if needDownload {
-		if idx == 1 {
-			info.DownloadOnly = true
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func createUbuntuVM(ctx context.Context, isoPath string, info *ubuntuInstallInfo) error {
-	disks, err := quickget.DiskStatus()
+	useDisk, vmid, err := resolveStorageAndVMID()
 	if err != nil {
 		return err
-	}
-	useDisk := "local"
-	if len(disks) > 0 {
-		useDisk = disks[0]
-	}
-	for _, disk := range disks {
-		if disk == "local-lvm" {
-			useDisk = "local-lvm"
-			break
-		}
-	}
-
-	items, err := quickget.QMList()
-	if err != nil {
-		return err
-	}
-	vmid := 100
-	if len(items) > 0 {
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].VMID < items[j].VMID
-		})
-		vmid = items[len(items)-1].VMID + 1
 	}
 	imgName := filepath.Base(info.UbuntuISO)
 	vmName := toBetterUbuntuName(imgName)
@@ -217,9 +167,7 @@ func createUbuntuVM(ctx context.Context, isoPath string, info *ubuntuInstallInfo
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
 		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine q35 --bios ovmf --cpu host --net0 virtio,bridge=vmbr0`,
-			vmName,
-			info.Memory,
-			info.Cores),
+			vmName, info.Memory, info.Cores),
 		fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m", useDisk),
 		fmt.Sprintf("qm set $VMID --scsi0 %s:%d", useDisk, info.Disk),
 		fmt.Sprintf(`qm set $VMID --ide0 local:iso/%s,media=cdrom`, imgName),
@@ -228,7 +176,6 @@ func createUbuntuVM(ctx context.Context, isoPath string, info *ubuntuInstallInfo
 		`qm set $VMID --ostype l26`,
 		`echo "VMOK"`,
 	}
-	//fmt.Println(strings.Join(scripts, "\n"))
 	out, err := utils.BatchOutput(ctx, scripts, 0)
 	if err != nil {
 		return err

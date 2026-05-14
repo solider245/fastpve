@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -48,9 +47,15 @@ type windowsInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
+func (i *windowsInstallInfo) getDisplayName() string    { return filepath.Base(i.WindowISO) }
+func (i *windowsInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
+func (i *windowsInstallInfo) getCores() int             { return i.Cores }
+func (i *windowsInstallInfo) getMemory() int            { return i.Memory }
+func (i *windowsInstallInfo) getDisk() int              { return i.Disk }
+
 func promptInstallWindows() error {
-	isoPath := "/var/lib/vz/template/iso/"
-	cachePath := "/var/lib/vz/template/cache"
+	isoPath := defaultISOPath
+	cachePath := defaultCachePath
 	downer := newDownloader()
 	statusPath := filepath.Join(cachePath, "windows_install.ops")
 	status, _ := vmdownloader.IsStatusValid(downer, statusPath)
@@ -105,7 +110,7 @@ func promptInstallWindows() error {
 		info.VirtIO == "" {
 		needDownload = true
 	}
-	next, err := promptWinDownloadInstall(info, needDownload)
+	next, err := promptDownloadInstall(info, needDownload)
 	if err != nil {
 		return err
 	}
@@ -328,37 +333,6 @@ func promptEdition(label string, editions []string) (int, error) {
 	return idx, err
 }
 
-func promptWinDownloadInstall(info *windowsInstallInfo, needDownload bool) (bool, error) {
-	var items []string
-	if needDownload {
-		items = []string{"下载并安装", "仅下载", "退出"}
-	} else {
-		items = []string{"安装", "退出"}
-	}
-	prompt := promptui.Select{
-		Label: fmt.Sprintf("选择完成，继续安装%s：（CPU：%d,内存：%dMB,硬盘：%dGB）",
-			filepath.Base(info.WindowISO),
-			info.Cores,
-			info.Memory,
-			info.Disk),
-		Items: items,
-	}
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return false, err
-	}
-	if idx == 0 {
-		return true, nil
-	}
-	if needDownload {
-		if idx == 1 {
-			info.DownloadOnly = true
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 var (
 	ghcrMirrorOnce sync.Once
 	ghcrMirrors    []string
@@ -407,31 +381,9 @@ func promptGHCRMirrors() ([]string, error) {
 }
 
 func createWindowVM(ctx context.Context, info *windowsInstallInfo) error {
-	disks, err := quickget.DiskStatus()
+	useDisk, vmid, err := resolveStorageAndVMID()
 	if err != nil {
 		return err
-	}
-	useDisk := "local"
-	if len(disks) > 0 {
-		useDisk = disks[0]
-	}
-	for _, disk := range disks {
-		if disk == "local-lvm" {
-			useDisk = "local-lvm"
-			break
-		}
-	}
-
-	items, err := quickget.QMList()
-	if err != nil {
-		return err
-	}
-	vmid := 100
-	if len(items) > 0 {
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].VMID < items[j].VMID
-		})
-		vmid = items[len(items)-1].VMID + 1
 	}
 	winID := 10
 	tpmStr := `echo win10`
@@ -457,11 +409,7 @@ func createWindowVM(ctx context.Context, info *windowsInstallInfo) error {
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
 		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=vmbr0`,
-			vmName,
-			info.Memory,
-			info.Cores,
-			machine,
-			bios),
+			vmName, info.Memory, info.Cores, machine, bios),
 	}
 	if needEFI {
 		scripts = append(scripts, fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m,pre-enrolled-keys=1", useDisk))
@@ -476,7 +424,6 @@ func createWindowVM(ctx context.Context, info *windowsInstallInfo) error {
 		fmt.Sprintf("qm set %d --ostype win%d", vmid, winID),
 		`echo "VMOK"`,
 	)
-	//fmt.Println(strings.Join(scripts, "\n"))
 	out, err := utils.BatchOutput(ctx, scripts, 0)
 	if err != nil {
 		return err

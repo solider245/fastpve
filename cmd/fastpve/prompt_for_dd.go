@@ -2,24 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/solider245/fastpve/downloader"
-	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
-)
-
-const (
-	biosUEFI = iota
-	biosSeaBIOS
 )
 
 type ddInstallInfo struct {
@@ -32,9 +23,20 @@ type ddInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
+func (i *ddInstallInfo) getDisplayName() string {
+	if i.DDImgName != "" {
+		return filepath.Base(i.DDImgName)
+	}
+	return i.DDImgURL
+}
+func (i *ddInstallInfo) setDownloadOnly()           { i.DownloadOnly = true }
+func (i *ddInstallInfo) getCores() int              { return i.Cores }
+func (i *ddInstallInfo) getMemory() int             { return i.Memory }
+func (i *ddInstallInfo) getDisk() int               { return i.Disk }
+
 func promptForDD() error {
-	isoPath := "/var/lib/vz/template/iso/"
-	cachePath := "/var/lib/vz/template/cache"
+	isoPath := defaultISOPath
+	cachePath := defaultCachePath
 	downer := newDownloader()
 	statusPath := filepath.Join(cachePath, "dd_install.ops")
 	status, _ := vmdownloader.IsStatusValid(downer, statusPath)
@@ -78,7 +80,7 @@ func promptForDD() error {
 		info.DDImgURL != "" && info.DDImgName == "" {
 		needDownload = true
 	}
-	next, err := promptDDDownloadInstall(info, needDownload)
+	next, err := promptDownloadInstall(info, needDownload)
 	if err != nil {
 		return err
 	}
@@ -167,84 +169,19 @@ func promptDDBios() (int, error) {
 	return idx, nil
 }
 
-func promptDDDownloadInstall(info *ddInstallInfo, needDownload bool) (bool, error) {
-	var items []string
-	if needDownload {
-		items = []string{"下载并安装", "仅下载", "退出"}
-	} else {
-		items = []string{"安装", "退出"}
-	}
-	displayName := info.DDImgName
-	if displayName == "" {
-		displayName = info.DDImgURL
-	}
-	prompt := promptui.Select{
-		Label: fmt.Sprintf("选择完成，继续安装%s：（CPU：%d,内存：%dMB,硬盘：%dGB）",
-			filepath.Base(displayName),
-			info.Cores,
-			info.Memory,
-			info.Disk),
-		Items: items,
-	}
-	idx, _, err := prompt.Run()
-	if err != nil {
-		return false, err
-	}
-	if idx == 0 {
-		return true, nil
-	}
-	if needDownload {
-		if idx == 1 {
-			info.DownloadOnly = true
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error {
-	disks, err := quickget.DiskStatus()
+	useDisk, vmid, err := resolveStorageAndVMID()
 	if err != nil {
 		return err
-	}
-	useDisk := "local"
-	if len(disks) > 0 {
-		useDisk = disks[0]
-	}
-	for _, disk := range disks {
-		if disk == "local-lvm" {
-			useDisk = "local-lvm"
-			break
-		}
-	}
-
-	items, err := quickget.QMList()
-	if err != nil {
-		return err
-	}
-	vmid := 100
-	if len(items) > 0 {
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].VMID < items[j].VMID
-		})
-		vmid = items[len(items)-1].VMID + 1
 	}
 	imgName := info.DDImgName
 	vmName := strings.TrimSuffix(imgName, filepath.Ext(imgName))
-
-	bridge := "vmbr0"
-	bridgePrompt := promptui.Prompt{
-		Label:   "网络桥接 (默认 vmbr0)",
-		Default: bridge,
-	}
-	if b, err := bridgePrompt.Run(); err == nil && b != "" {
-		bridge = strings.TrimSpace(b)
-	}
+	bridge := promptBridge()
 
 	biosFlag := "ovmf"
 	ostype := "l26"
 	machine := "q35"
-	if info.BIOSMode == biosSeaBIOS {
+	if info.BIOSMode == vmdownloader.BIOSSeaBIOS {
 		biosFlag = "seabios"
 		ostype = "other"
 		machine = "i440fx"
@@ -255,20 +192,13 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 		`export LC_ALL="en_US.UTF-8"`,
 		fmt.Sprintf("export VMID=%d", vmid),
 		fmt.Sprintf(`qm create $VMID --name "%s" --memory %d --scsihw virtio-scsi-single --cores %d --sockets 1 --machine %s --bios %s --cpu host --net0 virtio,bridge=%s --agent enabled=1`,
-			vmName,
-			info.Memory,
-			info.Cores,
-			machine,
-			biosFlag,
-			bridge),
+			vmName, info.Memory, info.Cores, machine, biosFlag, bridge),
 	}
-
-	if info.BIOSMode == biosUEFI {
+	if info.BIOSMode == vmdownloader.BIOSUEFI {
 		scripts = append(scripts,
 			fmt.Sprintf("qm set $VMID -efidisk0 %s:1,format=raw,efitype=4m", useDisk),
 		)
 	}
-
 	scripts = append(scripts,
 		fmt.Sprintf("qm set $VMID --scsi0 %s:0,import-from=%s", useDisk, filepath.Join(isoPath, imgName)),
 		fmt.Sprintf(`qm set $VMID  --scsi1 %s:%d`, useDisk, info.Disk),
@@ -277,30 +207,12 @@ func createDDVM(ctx context.Context, isoPath string, info *ddInstallInfo) error 
 		`echo "VMOK"`,
 	)
 
-	out, err := utils.BatchOutput(ctx, scripts, 0)
+	err = runVMCreationScript(ctx, scripts, vmid)
 	if err != nil {
-		utils.BatchRun(ctx, []string{
-			fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
-		}, 10)
 		return err
 	}
-	if !strings.Contains(string(out), "VMOK") {
-		utils.BatchRun(ctx, []string{
-			fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
-		}, 10)
-		return errors.New("VM creation failed")
-	}
 	fmt.Println("创建虚拟机：", vmid, "成功")
-	// Auto-start and wait for IP
 	utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
-	fmt.Printf("等待 VM %d 获取IP...\n", vmid)
-	for i := 0; i < 30; i++ {
-		time.Sleep(time.Second)
-		ip := getVMIP(vmid)
-		if ip != "-" {
-			fmt.Printf("VM %d IP: %s\n", vmid, ip)
-			break
-		}
-	}
+	waitVMIP(ctx, vmid)
 	return nil
 }

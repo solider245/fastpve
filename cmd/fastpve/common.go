@@ -10,7 +10,7 @@ import (
 
 func selectNumber(label1, label2 string,
 	items []string,
-	numBegin int) (int, error) {
+	values []int) (int, error) {
 	prompt := promptui.Select{
 		Label: label1,
 		Items: items,
@@ -19,8 +19,8 @@ func selectNumber(label1, label2 string,
 	if err != nil {
 		return 0, err
 	}
-	if idx < len(items)-1 {
-		return int(1 << (idx + numBegin)), nil
+	if idx < len(values) {
+		return values[idx], nil
 	}
 	return promptInputNumber(label2)
 }
@@ -45,7 +45,7 @@ func promptPVECore() (int, error) {
 	return selectNumber("虚拟机核心：",
 		"虚拟机CPU核心数：",
 		cores,
-		1)
+		[]int{2, 4, 8})
 }
 
 func promptPVEMemory() (int, error) {
@@ -53,7 +53,7 @@ func promptPVEMemory() (int, error) {
 	return selectNumber("虚拟机内存大小：",
 		"自定义内存（MB）：",
 		memories,
-		10)
+		[]int{1024, 2048, 4096, 8192})
 }
 
 func promptPVEDisk() (int, error) {
@@ -61,7 +61,7 @@ func promptPVEDisk() (int, error) {
 	return selectNumber("选择硬盘",
 		"自定义硬盘：（GB）",
 		disks,
-		6)
+		[]int{64, 128, 256, 512, 1024})
 }
 
 func toBetterWindowName(winName string) string {

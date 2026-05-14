@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
-	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
@@ -25,6 +22,17 @@ type ddPresetInstallInfo struct {
 	Disk         int
 	DownloadOnly bool
 }
+
+func (i *ddPresetInstallInfo) getDisplayName() string {
+	if i.DDImgName != "" {
+		return i.DDImgName
+	}
+	return i.Preset.Name
+}
+func (i *ddPresetInstallInfo) setDownloadOnly()           { i.DownloadOnly = true }
+func (i *ddPresetInstallInfo) getCores() int              { return i.Cores }
+func (i *ddPresetInstallInfo) getMemory() int             { return i.Memory }
+func (i *ddPresetInstallInfo) getDisk() int               { return i.Disk }
 
 func makeDDPresetAction(p vmdownloader.DDPreset) func() error {
 	return func() error { return installFromDDPreset(p) }
@@ -79,7 +87,7 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 	info.DownloadURL = downloadURL
 
 	// Cache fast-path: if the final image already exists, skip to confirmation
-	isoPath := "/var/lib/vz/template/iso/"
+	isoPath := defaultISOPath
 	if finalName := vmdownloader.FinalImageName(downloadURL); finalName != "" {
 		if _, err := os.Stat(filepath.Join(isoPath, finalName)); err == nil {
 			fmt.Println("  镜像已缓存:", finalName)
@@ -106,36 +114,27 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 
 	var err error
 	fmt.Println()
-	info.Cores, err = promptPVECoreWithDefault(preset.RecCores)
+	info.Cores, err = promptIntWithDefault("CPU核数", preset.RecCores)
 	if err != nil {
 		return err
 	}
-	info.Memory, err = promptPVEMemoryWithDefault(preset.RecMemoryMB)
+	info.Memory, err = promptIntWithDefault("内存大小/MB", preset.RecMemoryMB)
 	if err != nil {
 		return err
 	}
-	info.Disk, err = promptPVEDiskWithDefault(preset.MinDiskGB)
+	info.Disk, err = promptIntWithDefault("磁盘大小/GB", preset.MinDiskGB)
 	if err != nil {
 		return err
 	}
 
 	// debug: fmt.Println("install=", utils.ToString(info))
 
-	actionItems := []string{"下载并安装", "仅下载", "退出"}
-	actionPrompt := promptui.Select{
-		Label: fmt.Sprintf("确认安装 %s（CPU:%d 内存:%dMB 磁盘:%dGB）",
-			preset.Name, info.Cores, info.Memory, info.Disk),
-		Items: actionItems,
-	}
-	actionIdx, _, err := actionPrompt.Run()
+	next, err := promptDownloadInstall(info, true)
 	if err != nil {
 		return errContinue
 	}
-	if actionIdx == 2 {
+	if !next {
 		return nil
-	}
-	if actionIdx == 1 {
-		info.DownloadOnly = true
 	}
 
 	err = downloadAndCreateDDPresetVM(info)
@@ -146,8 +145,8 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 }
 
 func downloadAndCreateDDPresetVM(info *ddPresetInstallInfo) error {
-	isoPath := "/var/lib/vz/template/iso/"
-	cachePath := "/var/lib/vz/template/cache"
+	isoPath := defaultISOPath
+	cachePath := defaultCachePath
 	downer := newDownloader()
 	statusPath := filepath.Join(cachePath, "dd_preset_install.ops")
 	ctx := context.TODO()
@@ -168,31 +167,9 @@ func downloadAndCreateDDPresetVM(info *ddPresetInstallInfo) error {
 }
 
 func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstallInfo) error {
-	disks, err := quickget.DiskStatus()
+	useDisk, vmid, err := resolveStorageAndVMID()
 	if err != nil {
 		return err
-	}
-	useDisk := "local"
-	if len(disks) > 0 {
-		useDisk = disks[0]
-	}
-	for _, disk := range disks {
-		if disk == "local-lvm" {
-			useDisk = "local-lvm"
-			break
-		}
-	}
-
-	items, err := quickget.QMList()
-	if err != nil {
-		return err
-	}
-	vmid := 100
-	if len(items) > 0 {
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].VMID < items[j].VMID
-		})
-		vmid = items[len(items)-1].VMID + 1
 	}
 
 	preset := info.Preset
@@ -214,14 +191,7 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 	baseName := strings.ReplaceAll(preset.Name, " ", "")
 	counter := 1
 
-	bridge := "vmbr0"
-	bridgePrompt := promptui.Prompt{
-		Label:   "网络桥接 (默认 vmbr0)",
-		Default: bridge,
-	}
-	if b, err := bridgePrompt.Run(); err == nil && b != "" {
-		bridge = strings.TrimSpace(b)
-	}
+	bridge := promptBridge()
 
 	for {
 		vmName := baseName
@@ -251,35 +221,13 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 			`echo "VMOK"`,
 		)
 
-		out, err := utils.BatchOutput(ctx, scripts, 0)
+		err = runVMCreationScript(ctx, scripts, vmid)
 		if err != nil {
-			// Clean up partial VM on failure
-			cleanupErr := utils.BatchRun(ctx, []string{
-				fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
-			}, 10)
-			if cleanupErr != nil {
-				fmt.Println("清理残留失败:", cleanupErr)
-			}
 			return err
 		}
-		if !strings.Contains(string(out), "VMOK") {
-			utils.BatchRun(ctx, []string{
-				fmt.Sprintf("qm destroy %d --purge 2>/dev/null; true", vmid),
-			}, 10)
-			return errors.New("VM creation failed")
-		}
 		fmt.Println("创建虚拟机：", vmid, "成功")
-		// Auto-start and wait for IP
 		utils.BatchRun(ctx, []string{fmt.Sprintf("qm start %d", vmid)}, 10)
-		fmt.Printf("等待 VM %d 获取IP...\n", vmid)
-		for i := 0; i < 30; i++ {
-			time.Sleep(time.Second)
-			ip := getVMIP(vmid)
-			if ip != "-" {
-				fmt.Printf("VM %d IP: %s\n", vmid, ip)
-				break
-			}
-		}
+		waitVMIP(ctx, vmid)
 		counter++
 		vmid++
 
@@ -296,71 +244,3 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 	return nil
 }
 
-func promptPVECoreWithDefault(def int) (int, error) {
-	validate := func(input string) error { return nil }
-	prompt := promptui.Prompt{
-		Label:    fmt.Sprintf("CPU核数 (默认 %d)", def),
-		Default:  fmt.Sprintf("%d", def),
-		Validate: validate,
-	}
-	result, err := prompt.Run()
-	if err != nil {
-		return 0, err
-	}
-	result = strings.TrimSpace(result)
-	if result == "" {
-		return def, nil
-	}
-	var cores int
-	fmt.Sscanf(result, "%d", &cores)
-	if cores <= 0 {
-		cores = def
-	}
-	return cores, nil
-}
-
-func promptPVEMemoryWithDefault(def int) (int, error) {
-	validate := func(input string) error { return nil }
-	prompt := promptui.Prompt{
-		Label:    fmt.Sprintf("内存大小/MB (默认 %d)", def),
-		Default:  fmt.Sprintf("%d", def),
-		Validate: validate,
-	}
-	result, err := prompt.Run()
-	if err != nil {
-		return 0, err
-	}
-	result = strings.TrimSpace(result)
-	if result == "" {
-		return def, nil
-	}
-	var mem int
-	fmt.Sscanf(result, "%d", &mem)
-	if mem <= 0 {
-		mem = def
-	}
-	return mem, nil
-}
-
-func promptPVEDiskWithDefault(def int) (int, error) {
-	validate := func(input string) error { return nil }
-	prompt := promptui.Prompt{
-		Label:    fmt.Sprintf("磁盘大小/GB (默认 %d)", def),
-		Default:  fmt.Sprintf("%d", def),
-		Validate: validate,
-	}
-	result, err := prompt.Run()
-	if err != nil {
-		return 0, err
-	}
-	result = strings.TrimSpace(result)
-	if result == "" {
-		return def, nil
-	}
-	var disk int
-	fmt.Sscanf(result, "%d", &disk)
-	if disk <= 0 {
-		disk = def
-	}
-	return disk, nil
-}
