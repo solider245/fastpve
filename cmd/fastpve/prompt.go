@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 var errContinue = errors.New("continue")
@@ -72,7 +72,8 @@ func mainPrompt() error {
 	for {
 		_, result, err := prompt.Run()
 		if err != nil {
-			fmt.Println("操作取消:", err); return err
+			fmt.Println("操作取消:", err)
+			return err
 		}
 
 		for _, it := range items {

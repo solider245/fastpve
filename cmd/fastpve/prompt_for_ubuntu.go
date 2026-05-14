@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/downloader"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 const (
@@ -32,11 +32,11 @@ type ubuntuInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
-func (i *ubuntuInstallInfo) getDisplayName() string    { return filepath.Base(i.UbuntuISO) }
-func (i *ubuntuInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
-func (i *ubuntuInstallInfo) getCores() int             { return i.Cores }
-func (i *ubuntuInstallInfo) getMemory() int            { return i.Memory }
-func (i *ubuntuInstallInfo) getDisk() int              { return i.Disk }
+func (i *ubuntuInstallInfo) getDisplayName() string { return filepath.Base(i.UbuntuISO) }
+func (i *ubuntuInstallInfo) setDownloadOnly()       { i.DownloadOnly = true }
+func (i *ubuntuInstallInfo) getCores() int          { return i.Cores }
+func (i *ubuntuInstallInfo) getMemory() int         { return i.Memory }
+func (i *ubuntuInstallInfo) getDisk() int           { return i.Disk }
 
 func promptForUbuntu() error {
 	isoPath := defaultISOPath

@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 type ddPresetInstallInfo struct {
@@ -29,10 +29,10 @@ func (i *ddPresetInstallInfo) getDisplayName() string {
 	}
 	return i.Preset.Name
 }
-func (i *ddPresetInstallInfo) setDownloadOnly()           { i.DownloadOnly = true }
-func (i *ddPresetInstallInfo) getCores() int              { return i.Cores }
-func (i *ddPresetInstallInfo) getMemory() int             { return i.Memory }
-func (i *ddPresetInstallInfo) getDisk() int               { return i.Disk }
+func (i *ddPresetInstallInfo) setDownloadOnly() { i.DownloadOnly = true }
+func (i *ddPresetInstallInfo) getCores() int    { return i.Cores }
+func (i *ddPresetInstallInfo) getMemory() int   { return i.Memory }
+func (i *ddPresetInstallInfo) getDisk() int     { return i.Disk }
 
 func makeDDPresetAction(p vmdownloader.DDPreset) func() error {
 	return func() error { return installFromDDPreset(p) }
@@ -243,4 +243,3 @@ func createDDPresetVM(ctx context.Context, isoPath string, info *ddPresetInstall
 	}
 	return nil
 }
-

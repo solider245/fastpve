@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/downloader"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 const (
@@ -27,11 +27,11 @@ type istoreInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
-func (i *istoreInstallInfo) getDisplayName() string    { return filepath.Base(i.IstoreIMG) }
-func (i *istoreInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
-func (i *istoreInstallInfo) getCores() int             { return i.Cores }
-func (i *istoreInstallInfo) getMemory() int            { return i.Memory }
-func (i *istoreInstallInfo) getDisk() int              { return i.Disk }
+func (i *istoreInstallInfo) getDisplayName() string { return filepath.Base(i.IstoreIMG) }
+func (i *istoreInstallInfo) setDownloadOnly()       { i.DownloadOnly = true }
+func (i *istoreInstallInfo) getCores() int          { return i.Cores }
+func (i *istoreInstallInfo) getMemory() int         { return i.Memory }
+func (i *istoreInstallInfo) getDisk() int           { return i.Disk }
 
 func promptForIstore() error {
 	isoPath := defaultISOPath

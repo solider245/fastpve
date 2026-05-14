@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/downloader"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 type ddInstallInfo struct {
@@ -29,10 +29,10 @@ func (i *ddInstallInfo) getDisplayName() string {
 	}
 	return i.DDImgURL
 }
-func (i *ddInstallInfo) setDownloadOnly()           { i.DownloadOnly = true }
-func (i *ddInstallInfo) getCores() int              { return i.Cores }
-func (i *ddInstallInfo) getMemory() int             { return i.Memory }
-func (i *ddInstallInfo) getDisk() int               { return i.Disk }
+func (i *ddInstallInfo) setDownloadOnly() { i.DownloadOnly = true }
+func (i *ddInstallInfo) getCores() int    { return i.Cores }
+func (i *ddInstallInfo) getMemory() int   { return i.Memory }
+func (i *ddInstallInfo) getDisk() int     { return i.Disk }
 
 func promptForDD() error {
 	isoPath := defaultISOPath
@@ -74,7 +74,7 @@ func promptForDD() error {
 		return err
 	}
 
-		// debug: fmt.Println("install=", utils.ToString(info))
+	// debug: fmt.Println("install=", utils.ToString(info))
 	var needDownload bool
 	if (status != nil && info.DDImgURL == status.Url) ||
 		info.DDImgURL != "" && info.DDImgName == "" {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
+	"github.com/solider245/fastpve/utils"
 )
 
 func promptSystemTools() error {
@@ -21,6 +21,7 @@ func promptSystemTools() error {
 		{"清理旧内核", promptCleanOldKernels},
 		{"ZFS ARC 调优", promptZFSTuning},
 		{"CPU 调度器切换", promptCPUScaling},
+		{"系统状态与通知", promptHealthCheck},
 		{"返回", func() error { return errContinue }},
 	}
 

@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 func promptManageVMs() error {
@@ -231,7 +231,6 @@ func promptManageImages() error {
 	return errContinue
 }
 
-
 func getPresetSource(filename string) string {
 	for _, cat := range vmdownloader.AllDDPresetCategories() {
 		for _, p := range cat.Presets {
@@ -244,7 +243,6 @@ func getPresetSource(filename string) string {
 	}
 	return "← 自定义URL"
 }
-
 
 func getVMIP(vmid int) string {
 	out, err := utils.BatchOutput(context.TODO(), []string{

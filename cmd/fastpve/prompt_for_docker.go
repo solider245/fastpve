@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
-	"github.com/manifoldco/promptui"
 )
 
 func promptForDocker() error {

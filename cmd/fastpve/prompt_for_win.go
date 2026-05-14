@@ -10,11 +10,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/manifoldco/promptui"
 	"github.com/solider245/fastpve/downloader"
 	"github.com/solider245/fastpve/quickget"
 	"github.com/solider245/fastpve/utils"
 	"github.com/solider245/fastpve/vmdownloader"
-	"github.com/manifoldco/promptui"
 )
 
 var winEditions = []string{
@@ -49,11 +49,11 @@ type windowsInstallInfo struct {
 	DownloadOnly bool   `json:"downloadOnly"`
 }
 
-func (i *windowsInstallInfo) getDisplayName() string    { return filepath.Base(i.WindowISO) }
-func (i *windowsInstallInfo) setDownloadOnly()          { i.DownloadOnly = true }
-func (i *windowsInstallInfo) getCores() int             { return i.Cores }
-func (i *windowsInstallInfo) getMemory() int            { return i.Memory }
-func (i *windowsInstallInfo) getDisk() int              { return i.Disk }
+func (i *windowsInstallInfo) getDisplayName() string { return filepath.Base(i.WindowISO) }
+func (i *windowsInstallInfo) setDownloadOnly()       { i.DownloadOnly = true }
+func (i *windowsInstallInfo) getCores() int          { return i.Cores }
+func (i *windowsInstallInfo) getMemory() int         { return i.Memory }
+func (i *windowsInstallInfo) getDisk() int           { return i.Disk }
 
 func promptInstallWindows() error {
 	isoPath := defaultISOPath
@@ -116,7 +116,7 @@ func promptInstallWindows() error {
 	if err != nil {
 		return err
 	}
-		if !next {
+	if !next {
 		return nil
 	}
 

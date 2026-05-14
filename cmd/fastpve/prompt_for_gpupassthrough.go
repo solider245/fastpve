@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
+	"github.com/solider245/fastpve/utils"
 )
 
 /**
