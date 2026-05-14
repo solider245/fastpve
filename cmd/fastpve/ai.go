@@ -38,58 +38,108 @@ func runPI() error {
 
 func executeTool(tool string, args map[string]any) toolResult {
 	ctx := context.TODO()
+	var result toolResult
+
 	switch tool {
 	case "health_check":
 		report := collectHealthReport(ctx)
-		return toolResult{OK: true, Data: report}
+		result = toolResult{OK: true, Data: report}
 	case "storage_overview":
 		zpoolOut, _ := utils.BatchOutput(ctx, []string{"zpool list 2>/dev/null || echo '无 ZFS 池'"}, 5)
 		dfOut, _ := utils.BatchOutput(ctx, []string{"df -h / 2>/dev/null"}, 5)
-		return toolResult{OK: true, Data: fmt.Sprintf("ZFS: %s\n磁盘: %s",
+		result = toolResult{OK: true, Data: fmt.Sprintf("ZFS: %s\n磁盘: %s",
 			strings.TrimSpace(string(zpoolOut)), strings.TrimSpace(string(dfOut)))}
 	case "vm_list":
 		out, err := utils.BatchOutput(ctx, []string{"qm list 2>/dev/null || true"}, 5)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: strings.TrimSpace(string(out))}
 		}
-		return toolResult{OK: true, Data: strings.TrimSpace(string(out))}
 	case "lxc_list":
 		out, err := utils.BatchOutput(ctx, []string{"pct list 2>/dev/null || true"}, 5)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: strings.TrimSpace(string(out))}
 		}
-		return toolResult{OK: true, Data: strings.TrimSpace(string(out))}
 	case "backup_network":
 		ts := time.Now().Format("20060102_1504")
 		err := utils.BatchRun(ctx, []string{fmt.Sprintf("cp /etc/network/interfaces /etc/network/interfaces.bak.%s", ts)}, 5)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: fmt.Sprintf("已备份到 /etc/network/interfaces.bak.%s", ts)}
 		}
-		return toolResult{OK: true, Data: fmt.Sprintf("已备份到 /etc/network/interfaces.bak.%s", ts)}
 	case "remove_sub_nag":
 		err := utils.BatchRun(ctx, []string{
 			`sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js`,
 			"systemctl restart pveproxy.service",
 		}, 10)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: "订阅弹窗已去除"}
 		}
-		return toolResult{OK: true, Data: "订阅弹窗已去除"}
 	case "system_update":
 		err := utils.BatchRun(ctx, []string{"apt update && apt dist-upgrade -y"}, 300)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: "系统已更新"}
 		}
-		return toolResult{OK: true, Data: "系统已更新"}
 	case "install_tools":
 		err := utils.BatchRun(ctx, []string{"apt install -y -qq curl wget vim htop net-tools lsof"}, 120)
 		if err != nil {
-			return toolResult{Error: err.Error()}
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: "常用工具已安装"}
 		}
-		return toolResult{OK: true, Data: "常用工具已安装"}
+	case "query_perf_history":
+		timespan := "24h"
+		if v, ok := args["timespan"]; ok {
+			if s, ok := v.(string); ok {
+				timespan = s
+			}
+		}
+		data, err := dbQueryPerfHistory(timespan)
+		if err != nil {
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: data}
+		}
+	case "query_audit_log":
+		var filter string
+		timespan := "24h"
+		if v, ok := args["filter"]; ok {
+			if s, ok := v.(string); ok {
+				filter = s
+			}
+		}
+		if v, ok := args["timespan"]; ok {
+			if s, ok := v.(string); ok {
+				timespan = s
+			}
+		}
+		data, err := dbQueryAuditLog(filter, timespan)
+		if err != nil {
+			result = toolResult{Error: err.Error()}
+		} else {
+			result = toolResult{OK: true, Data: data}
+		}
 	default:
-		return toolResult{Error: fmt.Sprintf("未知工具: %s", tool)}
+		result = toolResult{Error: fmt.Sprintf("未知工具: %s", tool)}
 	}
+
+	// 审计日志
+	auditSource := "ai"
+	msg := result.Data
+	if msg == "" {
+		msg = result.Error
+	}
+	logAudit(auditSource, tool, args, result.OK, msg)
+
+	return result
 }
 
 // -------- AI Agent ----------
@@ -177,24 +227,28 @@ func handleToolCall(tc toolCall) {
 
 func toolNeedsConfirm(tool string) bool {
 	readTools := map[string]bool{
-		"health_check":     true,
-		"storage_overview": true,
-		"vm_list":          true,
-		"lxc_list":         true,
+		"health_check":       true,
+		"storage_overview":   true,
+		"vm_list":            true,
+		"lxc_list":           true,
+		"query_perf_history": true,
+		"query_audit_log":    true,
 	}
 	return !readTools[tool]
 }
 
 func toolDescription(tool string) string {
 	desc := map[string]string{
-		"health_check":     "查看 PVE 系统健康状态",
-		"storage_overview": "查看存储概览",
-		"vm_list":          "列出所有虚拟机",
-		"lxc_list":         "列出所有 LXC 容器",
-		"backup_network":   "备份网络配置",
-		"remove_sub_nag":   "去除 PVE 订阅弹窗",
-		"system_update":    "更新系统",
-		"install_tools":    "安装常用工具",
+		"health_check":       "查看 PVE 系统健康状态",
+		"storage_overview":   "查看存储概览",
+		"vm_list":            "列出所有虚拟机",
+		"lxc_list":           "列出所有 LXC 容器",
+		"backup_network":     "备份网络配置",
+		"remove_sub_nag":     "去除 PVE 订阅弹窗",
+		"system_update":      "更新系统",
+		"install_tools":      "安装常用工具",
+		"query_perf_history": "查询性能趋势历史",
+		"query_audit_log":    "查询操作审计日志",
 	}
 	if d, ok := desc[tool]; ok {
 		return d
@@ -212,6 +266,8 @@ func systemPrompt() string {
 - storage_overview — 查看存储概览（ZFS、磁盘使用）
 - vm_list — 列出所有虚拟机
 - lxc_list — 列出所有 LXC 容器
+- query_perf_history — 查询性能历史趋势，参数 timespan: 1h/6h/24h/7d/30d
+- query_audit_log — 查询操作审计日志，参数 filter: 工具名, timespan: 时间范围
 - backup_network — 备份 /etc/network/interfaces 网络配置
 - remove_sub_nag — 去除 PVE Web UI 订阅弹窗
 - system_update — 运行 apt update && apt dist-upgrade 更新系统

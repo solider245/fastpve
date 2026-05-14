@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
@@ -15,6 +16,9 @@ func main() {
 		Usage: "Fast install systems on pve!",
 		Action: func(c *cli.Context) error {
 			InitConfig()
+			if err := InitDB(); err == nil {
+				startPerfCollector(5 * time.Minute)
+			}
 			return mainPrompt()
 		},
 		Commands: []*cli.Command{

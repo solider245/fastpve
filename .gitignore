@@ -1,14 +1,30 @@
 go.work
 go.work.sum
 bin/
+
 # Built binary artifacts
 /fastpve
 fastpve-download
+
 # IDE
 .idea/
 .vscode/
+
 # Temp
 tmp/
 *.test
 *.exe
 *.exe~
+
+# Secrets and local config (API keys, tokens, addresses)
+.env
+.env.*
+*.local
+config.local.conf
+
+# Backup files created by sed -i
+*.bak
+
+# Test output
+/test-output/
+/test_*.out
