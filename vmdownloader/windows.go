@@ -21,9 +21,28 @@ const (
 	Win7
 )
 
+// windowsManualURLs returns known manual download sources for each Windows version.
+func windowsManualURLs(version int, editionName string) string {
+	switch version {
+	case Win11:
+		return "Windows 11 官方镜像: https://www.microsoft.com/software-download/windows11\n  或访问: https://next.itellyou.cn/"
+	case Win10:
+		return "Windows 10 官方镜像: https://www.microsoft.com/software-download/windows10\n  或访问: https://next.itellyou.cn/"
+	case Win7:
+		return "Windows 7 官方镜像: https://www.microsoft.com/software-download/windows7\n  或访问: https://next.itellyou.cn/"
+	default:
+		return "Windows 镜像下载: https://next.itellyou.cn/"
+	}
+}
+
+// ghcrManualHint returns instructions for checking GHCR connectivity.
+func ghcrManualHint() string {
+	return "提示: 可尝试在 PVE 系统工具中切换 GHCR 镜像源以获得更稳定的下载"
+}
+
 // DownloadWindowsISO resumes a pending download when status is provided, or starts a new download for the given version/edition.
-// version should match the quickget expectation (e.g. 0 for Win11, 1 for Win10).
 func DownloadWindowsISO(ctx context.Context, d Downloader, quickGetPath, isoPath, statusPath string, status *downloader.DownloadStatus, version int, editionName string) (string, error) {
+	// Resume from status
 	if status != nil && version < 0 {
 		realPath := strings.TrimSuffix(status.TargetFile, ".syn")
 		fmt.Println("downloading:", filepath.Base(realPath))
@@ -46,9 +65,19 @@ func DownloadWindowsISO(ctx context.Context, d Downloader, quickGetPath, isoPath
 	if status != nil {
 		_ = os.Remove(status.TargetFile)
 		_ = os.Remove(statusPath)
-		status = nil
 	}
 
+	// Priority 1: GHCR with Chinese mirrors (fast in China)
+	if version != Win7 {
+		target, ghcrErr := downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
+		if ghcrErr == nil {
+			return target, nil
+		}
+		fmt.Println("GHCR 下载失败，尝试从微软官方源获取下载链接...")
+		fmt.Println(ghcrManualHint())
+	}
+
+	// Priority 2: resolve official download URL via quickget
 	var winVer string
 	if version == 0 {
 		winVer = "11"
@@ -62,30 +91,28 @@ func DownloadWindowsISO(ctx context.Context, d Downloader, quickGetPath, isoPath
 	}, "-")
 
 	urlStr, totalSize, modTime, err := resolveWindowsURL(ctx, d, quickGetPath, tag, winVer, editionName)
-	if err != nil {
-		fmt.Println("Resolve Windows download URL failed:", err, "\n尝试使用 GHCR 作为备用下载源...")
-		target, ghcrErr := downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
-		if ghcrErr == nil {
-			return target, nil
+	if err == nil {
+		status = &downloader.DownloadStatus{
+			Url:        urlStr,
+			TargetFile: filepath.Join(isoPath, tag+".iso.syn"),
+			TotalSize:  totalSize,
+			ModTime:    modTime,
 		}
-		return "", fmt.Errorf("resolve windows url: %w; GHCR fallback: %v", err, ghcrErr)
+		realPath := strings.TrimSuffix(status.TargetFile, ".syn")
+		fmt.Println("downloading:", filepath.Base(realPath))
+		return downloadAndMove(ctx, d, statusPath, status, realPath)
 	}
 
-	status = &downloader.DownloadStatus{
-		Url:        urlStr,
-		TargetFile: filepath.Join(isoPath, tag+".iso.syn"),
-		TotalSize:  totalSize,
-		ModTime:    modTime,
-	}
-	realPath := strings.TrimSuffix(status.TargetFile, ".syn")
-	fmt.Println("downloading:", filepath.Base(realPath))
-	return downloadAndMove(ctx, d, statusPath, status, realPath)
+	// All sources failed — show manual instructions
+	return "", fmt.Errorf("所有下载源均不可用\n%s\n%s",
+		windowsManualURLs(version, editionName),
+		ghcrManualHint())
 }
 
 func resolveWindowsURL(ctx context.Context, d Downloader, quickGetPath, tag, winVer, editionName string) (string, int64, time.Time, error) {
 	args := []string{"--url", "windows", winVer, editionName}
-	fmt.Println("获取下载URL，30s 超时...")
-	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+	fmt.Println("获取下载URL，15s 超时...")
+	ctx2, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	urlStr, _ := quickget.GetSystemURL(ctx2, quickGetPath, args)
 	if urlStr != "" {
