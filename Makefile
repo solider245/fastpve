@@ -42,6 +42,23 @@ clean:
 
 release: validate-version $(VERSION_FILE)
 
+# -------- 开发部署（本地编译 → 推送到 PVE 测试机）--------
+
+PVE_HOST ?= 100.72.34.32
+PVE_BIN_PATH ?= /usr/local/bin/fastpve
+SSH_KEY ?= $(HOME)/.ssh/id_rsa
+
+# 交叉编译 linux/amd64 + scp 推送（-C 启用压缩传输）
+deploy-pve: $(BIN_DIR)
+	GOOS=linux GOARCH=amd64 GOWORK=off $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/FastPVE-linux $(CMD)
+	scp -C -i $(SSH_KEY) "$(BIN_DIR)/FastPVE-linux" root@$(PVE_HOST):$(PVE_BIN_PATH)
+	ssh -i $(SSH_KEY) root@$(PVE_HOST) "chmod +x $(PVE_BIN_PATH) && echo '部署完成:'; fastpve version"
+	@echo ""
+	@echo "  部署成功！现在可以 SSH 到 PVE 测试："
+	@echo "    ssh root@$(PVE_HOST)"
+	@echo "    fastpve"
+	@echo "    fastpve ai \"查看系统状态\""
+
 validate-version:
 	@if [ -z "$(strip $(VERSION))" ]; then \
 		echo "VERSION is required (e.g. VERSION=0.1.5)"; \
