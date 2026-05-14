@@ -14,7 +14,7 @@ import (
 
 	"github.com/kspeeder/blobDownload/blobDownloader"
 	"github.com/kspeeder/docker-registry/lib"
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/utils"
 )
 
 const (

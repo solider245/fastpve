@@ -11,10 +11,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -98,7 +98,7 @@ func promptInstallWindows() error {
 		return err
 	}
 
-	fmt.Println("install=", utils.ToString(info))
+	// debug: fmt.Println("install=", utils.ToString(info))
 	var needDownload bool
 	if (status != nil && info.WindowISO == status.TargetFile) ||
 		info.WinVersion >= 0 && info.WinEdition >= 0 ||
@@ -109,7 +109,8 @@ func promptInstallWindows() error {
 	if err != nil {
 		return err
 	}
-	if !next {
+		if !next {
+		return nil
 	}
 
 	ctx := context.TODO()

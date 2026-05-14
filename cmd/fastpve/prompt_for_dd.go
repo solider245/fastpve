@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -72,7 +72,7 @@ func promptForDD() error {
 		return err
 	}
 
-	fmt.Println("install=", utils.ToString(info))
+		// debug: fmt.Println("install=", utils.ToString(info))
 	var needDownload bool
 	if (status != nil && info.DDImgURL == status.Url) ||
 		info.DDImgURL != "" && info.DDImgName == "" {

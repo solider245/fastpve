@@ -1,6 +1,6 @@
 package main
 
-import "github.com/linkease/fastpve/downloader"
+import "github.com/solider245/fastpve/downloader"
 
 // newDownloader creates a downloader without remote URL cache.
 // This is the default for open-source builds.

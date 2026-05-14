@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/kspeeder/urlcache/remoteurlcache"
-	"github.com/linkease/fastpve/downloader"
+	"github.com/solider245/fastpve/downloader"
 )
 
 const (

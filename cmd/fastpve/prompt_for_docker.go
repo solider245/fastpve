@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
 )
 

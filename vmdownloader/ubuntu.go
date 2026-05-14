@@ -7,7 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/linkease/fastpve/downloader"
+	"github.com/solider245/fastpve/downloader"
 )
 
 func DownloadUbuntuISO(ctx context.Context, d Downloader, isoPath, cachePath, statusPath string, status *downloader.DownloadStatus, ubuntuVer int) (string, error) {

@@ -38,7 +38,7 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 clean:
-	rm -f $(BINARY) $(VERSION_FILE) $(BIN_DIR)/FastPVE-*
+	rm -f $(BINARY) $(BINARY_DOWNLOAD) $(VERSION_FILE) $(BIN_DIR)/FastPVE-*
 
 release: validate-version $(VERSION_FILE)
 

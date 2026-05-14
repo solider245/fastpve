@@ -1,18 +1,14 @@
 package utils
 
 import (
-	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 )
 
 func ToString(value interface{}) string {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return ""
-	}
-	return string(data)
+	return fmt.Sprintf("%+v", value)
 }
 
 func CleanString(s string) string {

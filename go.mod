@@ -1,4 +1,4 @@
-module github.com/linkease/fastpve
+module github.com/solider245/fastpve
 
 go 1.24.4
 

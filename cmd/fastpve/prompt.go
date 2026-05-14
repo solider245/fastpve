@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -72,7 +71,7 @@ func mainPrompt() error {
 	for {
 		_, result, err := prompt.Run()
 		if err != nil {
-			os.Exit(-1)
+			fmt.Println("操作取消:", err); return err
 		}
 
 		for _, it := range items {

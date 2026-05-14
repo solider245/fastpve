@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -289,5 +289,5 @@ func getVMIP(vmid int) string {
 	if len(ips) == 0 {
 		return "-"
 	}
-	return strings.Join(ips, ",")
+	return ips[0]
 }

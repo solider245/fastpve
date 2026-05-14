@@ -3,3 +3,12 @@ go.work.sum
 bin/
 # Built binary artifact
 fastpve
+fastpve-download
+# IDE
+.idea/
+.vscode/
+# Temp
+tmp/
+*.test
+*.exe
+*.exe~

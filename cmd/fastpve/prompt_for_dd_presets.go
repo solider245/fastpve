@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 
@@ -119,7 +119,7 @@ func installFromDDPreset(preset vmdownloader.DDPreset) error {
 		return err
 	}
 
-	fmt.Println("install=", utils.ToString(info))
+	// debug: fmt.Println("install=", utils.ToString(info))
 
 	actionItems := []string{"下载并安装", "仅下载", "退出"}
 	actionPrompt := promptui.Select{

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/utils"
 	"github.com/manifoldco/promptui"
 )
 
@@ -68,6 +68,9 @@ func toBetterWindowName(winName string) string {
 	winName = utils.CleanString(strings.TrimSuffix(winName, ".iso"))
 	ss := strings.Split(winName, "-")
 	for i, s := range ss {
+		if len(s) == 0 {
+			continue
+		}
 		ss[i] = strings.ToUpper(s[0:1]) + strings.ToLower(s[1:])
 	}
 	return strings.Join(ss, "-")

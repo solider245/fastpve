@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/utils"
 )
 
 var ErrNoRedirectFound = errors.New("no redirect found")
@@ -56,19 +56,6 @@ func (d *Downloader) ResumableDownloader(ctx context.Context,
 	status *DownloadStatus,
 	progressCh chan *ProgressInfo) error {
 	var req *http.Request
-	/* statusPath := filepath.Base(filePath) + ".syn"
-	status, err := ReadUpdateDownload(statusPath)
-	isValid := true
-	if err != nil ||
-		status.Url != urlStr ||
-		status.TargetFile != filePath {
-		isValid = false
-		status = &DownloadStatus{
-			Url:        urlStr,
-			TargetFile: filePath,
-			Curr:       0,
-		}
-	} */
 
 	// Open file for writing
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)

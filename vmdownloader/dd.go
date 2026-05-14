@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/utils"
 )
 
 func FinalImageName(url string) string {
@@ -53,9 +53,12 @@ func DownloadDDImage(ctx context.Context, d Downloader, isoPath, cachePath, stat
 
 		downloadURL := url
 		if strings.Contains(url, "github.com") {
-			proxyURL := strings.Replace(url, "github.com", "gh.linkease.net:5443", 1)
-			if _, _, err := d.HeadInfo(proxyURL); err == nil {
-				downloadURL = proxyURL
+			for _, proxyHost := range []string{"gh.linkease.net:5443", "gh.565600.xyz"} {
+				proxyURL := strings.Replace(url, "github.com", proxyHost, 1)
+				if _, _, err := d.HeadInfo(proxyURL); err == nil {
+					downloadURL = proxyURL
+					break
+				}
 			}
 		}
 		headSize, headModTime, err := d.HeadInfo(downloadURL)
@@ -115,6 +118,13 @@ func decompressDD(ctx context.Context, cachePath, isoPath, targetFile string) (s
 	fmt.Printf("decompressing %s...\n", baseFileName)
 	extractedPath := filepath.Join(cachePath, extractedName)
 	destPath := filepath.Join(isoPath, extractedName)
+
+	// Skip decompression if final file already exists
+	if _, err := os.Stat(destPath); err == nil {
+		fmt.Println("  目标文件已存在:", extractedName)
+		return extractedName, nil
+	}
+
 	err := utils.BatchRun(ctx, []string{
 		fmt.Sprintf("%s %s", decompressor, targetFile),
 		fmt.Sprintf("mv %s %s", extractedPath, destPath),

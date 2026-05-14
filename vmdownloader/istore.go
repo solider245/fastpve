@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/utils"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/utils"
 )
 
 func DownloadIstoreIMG(ctx context.Context, d Downloader, isoPath, cachePath, statusPath string, status *downloader.DownloadStatus, ver int) (string, error) {

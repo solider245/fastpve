@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/utils"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/utils"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/manifoldco/promptui"
 )
 

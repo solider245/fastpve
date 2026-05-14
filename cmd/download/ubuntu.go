@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/urfave/cli/v3"
 )
 

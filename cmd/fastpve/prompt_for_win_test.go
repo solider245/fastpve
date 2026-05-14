@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/vmdownloader"
 )
 
 type fakeDownloader struct {

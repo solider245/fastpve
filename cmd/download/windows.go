@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/linkease/fastpve/downloader"
-	"github.com/linkease/fastpve/quickget"
-	"github.com/linkease/fastpve/vmdownloader"
+	"github.com/solider245/fastpve/downloader"
+	"github.com/solider245/fastpve/quickget"
+	"github.com/solider245/fastpve/vmdownloader"
 	"github.com/urfave/cli/v3"
 )
 
