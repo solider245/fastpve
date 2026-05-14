@@ -217,6 +217,16 @@ func ghcrWindowsReference(version int, edition string) (string, error) {
 		default:
 			return "", fmt.Errorf("GHCR Windows 7 仅支持 English Enterprise 或 Chinese (Simplified)")
 		}
+	case WinServer2025:
+		if !strings.EqualFold(edition, "Chinese (Simplified)") {
+			return "", fmt.Errorf("GHCR Windows Server 2025 仅支持 Chinese (Simplified)")
+		}
+		return "ghcr.io/kspeeder/winserver2025:cn_simplified", nil
+	case WinServer2022:
+		if !strings.EqualFold(edition, "Chinese (Simplified)") {
+			return "", fmt.Errorf("GHCR Windows Server 2022 仅支持 Chinese (Simplified)")
+		}
+		return "ghcr.io/kspeeder/winserver2022:cn_simplified", nil
 	default:
 		return "", fmt.Errorf("unsupported Windows version for GHCR: %d", version)
 	}

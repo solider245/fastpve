@@ -19,6 +19,8 @@ const (
 	Win11 = iota
 	Win10
 	Win7
+	WinServer2025
+	WinServer2022
 )
 
 // windowsManualURLs returns known manual download sources for each Windows version.
@@ -30,6 +32,10 @@ func windowsManualURLs(version int, editionName string) string {
 		return "Windows 10 官方镜像: https://www.microsoft.com/software-download/windows10\n  或访问: https://next.itellyou.cn/"
 	case Win7:
 		return "Windows 7 官方镜像: https://www.microsoft.com/software-download/windows7\n  或访问: https://next.itellyou.cn/"
+	case WinServer2025:
+		return "Windows Server 2025 评估版:\n  https://www.microsoft.com/zh-cn/evalcenter/download-windows-server-2025\n  https://www.microsoft.com/en-us/evalcenter/download-windows-server-2025"
+	case WinServer2022:
+		return "Windows Server 2022 评估版:\n  https://www.microsoft.com/zh-cn/evalcenter/download-windows-server-2022\n  https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022"
 	default:
 		return "Windows 镜像下载: https://next.itellyou.cn/"
 	}
@@ -53,8 +59,14 @@ func DownloadWindowsISO(ctx context.Context, d Downloader, quickGetPath, isoPath
 		return "", errors.New("windows version missing")
 	}
 
-	if version == Win7 {
-		return downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
+	if version == Win7 || version == WinServer2025 || version == WinServer2022 {
+		target, ghcrErr := downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
+		if ghcrErr == nil {
+			return target, nil
+		}
+		return "", fmt.Errorf("GHCR 下载失败\n%s\n%s",
+			windowsManualURLs(version, editionName),
+			ghcrManualHint())
 	}
 
 	if editionName == "" {
@@ -68,14 +80,12 @@ func DownloadWindowsISO(ctx context.Context, d Downloader, quickGetPath, isoPath
 	}
 
 	// Priority 1: GHCR with Chinese mirrors (fast in China)
-	if version != Win7 {
-		target, ghcrErr := downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
-		if ghcrErr == nil {
-			return target, nil
-		}
-		fmt.Println("GHCR 下载失败，尝试从微软官方源获取下载链接...")
-		fmt.Println(ghcrManualHint())
+	target, ghcrErr := downloadWindowsFromGHCR(ctx, isoPath, version, editionName)
+	if ghcrErr == nil {
+		return target, nil
 	}
+	fmt.Println("GHCR 下载失败，尝试从微软官方源获取下载链接...")
+	fmt.Println(ghcrManualHint())
 
 	// Priority 2: resolve official download URL via quickget
 	var winVer string

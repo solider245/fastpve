@@ -34,6 +34,8 @@ const (
 	Win11 = iota
 	Win10
 	Win7
+	WinServer2025
+	WinServer2022
 )
 
 type windowsInstallInfo struct {
@@ -228,6 +230,8 @@ func promptWinFiles(info *windowsInstallInfo,
 		{"全新下载 Windows11", Win11},
 		{"全新下载 Windows10", Win10},
 		{"全新下载 Windows7 (支持简体/英文)", Win7},
+		{"全新下载 Windows Server 2025", WinServer2025},
+		{"全新下载 Windows Server 2022", WinServer2022},
 	}
 	startNew := len(windows)
 	for _, opt := range newOptions {
@@ -296,16 +300,23 @@ func selectedEdition(info *windowsInstallInfo) (string, error) {
 	if info.WinEdition < 0 {
 		return "", errors.New("未选择 Windows 版本语言")
 	}
-	if info.WinVersion == Win7 {
+	switch info.WinVersion {
+	case Win7:
 		if info.WinEdition >= len(win7Editions) {
 			return "", fmt.Errorf("无效的 Windows 7 版本选项: %d", info.WinEdition)
 		}
 		return win7Editions[info.WinEdition], nil
+	case WinServer2025, WinServer2022:
+		if info.WinEdition >= len(winEditions) {
+			return "", fmt.Errorf("无效的 Windows Server 版本选项: %d", info.WinEdition)
+		}
+		return winEditions[info.WinEdition], nil
+	default:
+		if info.WinEdition >= len(winEditions) {
+			return "", fmt.Errorf("无效的 Windows 版本选项: %d", info.WinEdition)
+		}
+		return winEditions[info.WinEdition], nil
 	}
-	if info.WinEdition >= len(winEditions) {
-		return "", fmt.Errorf("无效的 Windows 版本选项: %d", info.WinEdition)
-	}
-	return winEditions[info.WinEdition], nil
 }
 
 func promptWinEdition(info *windowsInstallInfo) error {
@@ -390,9 +401,12 @@ func createWindowVM(ctx context.Context, info *windowsInstallInfo) error {
 	winID := 10
 	tpmStr := `echo win10`
 	switch info.WinVersion {
-	case Win11:
+	case Win11, WinServer2025:
 		winID = 11
 		tpmStr = fmt.Sprintf(`qm set $VMID -tpmstate0 %s:1,version=v2.0`, useDisk)
+	case WinServer2022:
+		winID = 10
+		tpmStr = `echo win10`
 	case Win7:
 		winID = 7
 		tpmStr = `echo win7`
